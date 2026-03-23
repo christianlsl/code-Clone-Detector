@@ -48,13 +48,27 @@ output_path: output/results.json     # 结果 JSON 保存路径
     _HF_DEFAULT_ENDPOINT = "https://hf-mirror.com"
     ```
 
-2. **运行检测**：
+2. **命令行运行检测**：
    ```bash
    uv run python main.py [你的JS代码目录路径]
    ```
    例如：
    ```bash
    uv run python main.py dataset/crcn
+   ```
+
+3. **作为 Python 库调用**：
+   你可以直接在代码中导入并使用该工具：
+   ```python
+   from main import run_clone_detection
+
+   # 运行检测并将结果保存到 config.yaml 中定义的路径
+   results = run_clone_detection("dataset/crcn")
+
+   # 遍历结果
+   for pair in results:
+       print(f"文件 A: {pair['file_a']} <-> 文件 B: {pair['file_b']}")
+       print(f"相似度: {pair['total_similarity']:.4f}")
    ```
 
 ## 输出结果说明

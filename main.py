@@ -159,20 +159,20 @@ def detect_clones(
     return similar_pairs
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="UniXcoder-based Code Clone Detector")
-    parser.add_argument("dir_path", type=str, help="Path to the directory containing JavaScript files")
-    args = parser.parse_args()
-
-    config = load_config(Path("config.yaml"))
+def run_clone_detection(dir_path: str | Path, config_path: str | Path = "config.yaml") -> list[dict[str, Any]]:
+    """
+    Higher-level interface to run the clone detection process.
+    Handles config loading, logging setup, and result saving.
+    """
+    config = load_config(Path(config_path))
     setup_logging(config.log_path)
     
-    logger.info("Starting clone detection process...")
+    logger.info(f"Starting clone detection for directory: {dir_path}")
 
-    dir_path = Path(args.dir_path)
+    dir_path = Path(dir_path)
     if not dir_path.is_dir():
         logger.error(f"Directory not found: {dir_path}")
-        return
+        return []
 
     similar_pairs = detect_clones(
         dir_path=dir_path,
@@ -196,18 +196,16 @@ def main() -> None:
         }, f, indent=2, ensure_ascii=False)
     
     logger.info(f"Results saved to {config.output_path}")
+    return similar_pairs
 
-    if not similar_pairs:
-        logger.info(f"No similar files found above the threshold ({config.similarity_threshold}).")
-        return
 
-    # Print a summary to log
-    # for pair in similar_pairs:
-    #     logger.info(f"Similar pair: {pair['file_a']} <-> {pair['file_b']} (Sim: {pair['total_similarity']:.4f})")
-    #     for fsim in pair['function_similarities'][:3]: # Show top 3 similar functions
-    #         name_a = fsim['name_a'] or "<anonymous>"
-    #         name_b = fsim['name_b'] or "<anonymous>"
-    #         logger.info(f"  * {fsim['similarity']:.4f} | A: {name_a:<20} | B: {name_b:<20}")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="UniXcoder-based Code Clone Detector")
+    parser.add_argument("dir_path", type=str, help="Path to the directory containing JavaScript files")
+    parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
+    args = parser.parse_args()
+
+    run_clone_detection(args.dir_path, args.config)
 
 
 if __name__ == "__main__":

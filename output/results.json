@@ -1,83 +1,15 @@
 {
   "config": {
-    "dir_path": "dataset/crcn",
+    "dir_path": "/home/lsl/projects2/lowCode/code-Clone-Detector/dataset/crcn/celeri",
     "threshold": 0.95,
     "model_name": "microsoft/unixcoder-base",
     "max_length": 512
   },
   "results": [
     {
-      "file_a": "dataset/crcn/emailify/lib/test/compatibility/test-gmail.js",
-      "file_b": "dataset/crcn/emailify/lib/test/compatibility/test-android.js",
-      "total_similarity": 0.9959487915039062,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/nexe/examples/conditional-reqs/build.js",
-      "file_b": "dataset/crcn/nexe/examples/embedded-files/build.js",
-      "total_similarity": 0.9952330589294434,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/nexe/examples/embedded-files/build.js",
-      "file_b": "dataset/crcn/nexe/examples/hello-world/build.js",
-      "total_similarity": 0.9935032725334167,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/nexe/examples/conditional-reqs/build.js",
-      "file_b": "dataset/crcn/nexe/examples/hello-world/build.js",
-      "total_similarity": 0.993023157119751,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/emailify/lib/test/compatibility/test-gmail.js",
-      "file_b": "dataset/crcn/emailify/lib/test/compatibility/test-yahoo-mail.js",
-      "total_similarity": 0.9911261200904846,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/emailify/lib/test/compatibility/test-android.js",
-      "file_b": "dataset/crcn/emailify/lib/test/compatibility/test-yahoo-mail.js",
-      "total_similarity": 0.9859588146209717,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/node-awsm/test/ec2/instances/update-test.js",
-      "file_b": "dataset/crcn/node-awsm/test/ec2/addresses/basic-test.js",
-      "total_similarity": 0.9782320261001587,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/node-awsm/lib/ec2/regions/instances/index.js",
-      "file_b": "dataset/crcn/node-awsm/lib/ec2/regions/securityGroups/index.js",
-      "total_similarity": 0.972705066204071,
-      "function_similarities": [
-        {
-          "func_a": "\n\nfunction InstanceCollection (region) {\n  BaseCollection.call(this, region);\n}",
-          "name_a": "InstanceCollection",
-          "func_b": "\n\nfunction SecurityGroupCollection (region) {\n  BaseCollection.call(this, region);\n}",
-          "name_b": "SecurityGroupCollection",
-          "similarity": 0.9652755856513977
-        }
-      ]
-    },
-    {
-      "file_a": "dataset/crcn/node-awsm/lib/ec2/regions/instances/index.js",
-      "file_b": "dataset/crcn/node-awsm/lib/ec2/regions/volumes/model.js",
-      "total_similarity": 0.9612981081008911,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/celeri/examples/hello.js",
-      "file_b": "dataset/crcn/celeri/examples/hello2.js",
+      "file_a": "/home/lsl/projects2/lowCode/code-Clone-Detector/dataset/crcn/celeri/examples/hello.js",
+      "file_b": "/home/lsl/projects2/lowCode/code-Clone-Detector/dataset/crcn/celeri/examples/hello2.js",
       "total_similarity": 0.956045389175415,
-      "function_similarities": []
-    },
-    {
-      "file_a": "dataset/crcn/node-awsm/lib/ec2/regions/instances/index.js",
-      "file_b": "dataset/crcn/node-awsm/lib/ec2/regions/instances/model.js",
-      "total_similarity": 0.9532232880592346,
       "function_similarities": []
     }
   ]
