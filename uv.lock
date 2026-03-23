@@ -50,6 +50,7 @@ name = "code-clone-detector"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "pyyaml" },
     { name = "torch" },
     { name = "torchaudio" },
     { name = "torchvision" },
@@ -60,6 +61,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "torch", specifier = "==2.6.0" },
     { name = "torchaudio", specifier = "==2.6.0" },
     { name = "torchvision", specifier = "==0.21.0" },

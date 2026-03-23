@@ -1,4 +1,6 @@
-file_a: dataset/crcn/celeri/examples/hello.js
-file_b: dataset/crcn/emailify/lib/index.js
-model_name: microsoft/codebert-base
+model_name: microsoft/unixcoder-base
+model_local_path: models/unixcoder-base
 max_length: 512
+similarity_threshold: 0.95
+log_path: logs/process.log
+output_path: output/results.json
