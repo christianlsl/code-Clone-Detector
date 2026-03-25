@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from typing import Any
 import torch
 import yaml
 from torch.nn.functional import cosine_similarity
+from tqdm import tqdm
 
 from src.tokenizer import CodeBlock, FileEmbeddingResult, embed_file_blocks
 from src.unixcoder import UniXcoder
@@ -122,7 +124,7 @@ def detect_clones(
 
     logger.info(f"Found {len(js_files)} .js files. Computing embeddings...")
     results: list[FileEmbeddingResult] = []
-    for f in js_files:
+    for f in tqdm(js_files, desc="Embedding files"):
         try:
             res = embed_file_blocks(f, model, max_length)
             results.append(res)
@@ -133,7 +135,9 @@ def detect_clones(
 
     similar_pairs = []
     logger.info(f"Comparing {len(results)} files for clones (threshold: {threshold})...")
-    for res_a, res_b in itertools.combinations(results, 2):
+    
+    total_pairs = len(results) * (len(results) - 1) // 2
+    for res_a, res_b in tqdm(itertools.combinations(results, 2), total=total_pairs, desc="Comparing files"):
         sim = cosine_similarity(res_a.file_embedding.unsqueeze(0), res_b.file_embedding.unsqueeze(0)).item()
         if sim >= threshold:
             func_sims = compare_functions(res_a, res_b, threshold)
@@ -167,6 +171,7 @@ def run_clone_detection(dir_path: str | Path, config_path: str | Path = "config.
     config = load_config(Path(config_path))
     setup_logging(config.log_path)
     
+    start_time = time.time()
     logger.info(f"Starting clone detection for directory: {dir_path}")
 
     dir_path = Path(dir_path)
@@ -195,7 +200,10 @@ def run_clone_detection(dir_path: str | Path, config_path: str | Path = "config.
             "results": similar_pairs
         }, f, indent=2, ensure_ascii=False)
     
+    end_time = time.time()
+    duration = end_time - start_time
     logger.info(f"Results saved to {config.output_path}")
+    logger.info(f"Clone detection completed in {duration:.2f} seconds.")
     return similar_pairs
 
 
