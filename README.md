@@ -1,16 +1,14 @@
 # Code Clone Detector (基于 UniXcoder 的 JS 代码克隆检测工具)
 
-本项目是一款针对 JavaScript 源码的克隆检测工具。它利用 **UniXcoder** 模型提取代码语义特征，并结合 **Tree-sitter** 进行精确的代码结构分析，支持文件级和函数级的相似度比对。
+本项目是一款针对 JavaScript 源码的克隆检测工具。它利用 **UniXcoder** 模型提取代码语义特征，并结合 **DBSCAN** 对文件向量进行无监督聚类，自动发现相似代码簇。
 
 ## 核心特性
 
 - **结构化拆分**：使用 Tree-sitter 对 JavaScript 代码进行解析，自动拆分为顶层代码块（函数声明、类、变量定义等）。
 - **语义嵌入**：集成 UniXcoder 模型，通过 `<encoder-only>` 模式为每个代码块生成高维语义向量。
-- **自动命名提取**：自动提取函数名、类名及变量名，并在结果中清晰展示。
-- **批量递归检测**：支持递归扫描指定目录下的所有 `.js` 文件，进行两两比对。
-- **双重阈值过滤**：
-    - **整体相似度**：过滤出高度疑似克隆的文件对。
-    - **函数相似度**：在相似文件中进一步比对并过滤出相似的函数片段。
+- **批量递归检测**：支持递归扫描指定目录下的所有 `.js` 文件。
+- **DBSCAN 聚类**：基于余弦距离对文件级 embedding 自动聚类，无需预设聚类数量。
+- **可调聚类粒度**：通过相似度阈值与 `dbscan_min_samples` 控制聚类松紧和最小簇规模。
 - **模型本地化**：支持自动下载并保存 UniXcoder 模型到本地，后续运行无需联网，极速加载。
 - **结构化输出**：处理过程详细记录于日志文件，最终比对结果以 JSON 格式保存，方便集成和二次分析。
 
@@ -29,7 +27,8 @@
 model_name: microsoft/unixcoder-base # 模型名 (Hugging Face)
 model_local_path: models/unixcoder-base # 模型本地保存/加载路径
 max_length: 512                      # Token 最大长度
-similarity_threshold: 0.9            # 相似度阈值 (0-1)
+similarity_threshold: 0.9            # 相似度阈值 (0-1)，内部转换为 DBSCAN eps=1-threshold
+dbscan_min_samples: 2                # DBSCAN 最小样本数
 log_path: logs/process.log           # 日志输出路径
 output_path: output/results.json     # 结果 JSON 保存路径
 ```
@@ -65,24 +64,27 @@ output_path: output/results.json     # 结果 JSON 保存路径
    # 运行检测并将结果保存到 config.yaml 中定义的路径
    results = run_clone_detection("dataset/crcn")
 
-   # 遍历结果
-   for pair in results:
-       print(f"文件 A: {pair['file_a']} <-> 文件 B: {pair['file_b']}")
-       print(f"相似度: {pair['total_similarity']:.4f}")
+   # 遍历聚类结果
+   for cluster in results:
+       print(f"簇 ID: {cluster['cluster_id']}")
+       print(f"类型: {cluster['cluster_type']}")  # cluster 或 noise
+       print(f"文件数: {cluster['size']}")
+       print(f"文件列表: {cluster['files']}")
    ```
 
 ## 输出结果说明
 
 ### 日志 (`logs/process.log`)
-记录了程序的运行状态、设备信息、模型加载情况、文件扫描进度以及发现的相似对摘要。
+记录了程序的运行状态、设备信息、模型加载情况、文件扫描进度以及聚类摘要。
 
 ### 结果文件 (`output/results.json`)
 包含以下结构的详细数据：
 - `config`: 运行时使用的配置快照。
-- `results`: 相似文件对列表，每个项包含：
-    - `file_a` / `file_b`: 文件路径。
-    - `total_similarity`: 文件整体余弦相似度。
-    - `function_similarities`: 相似度超过阈值的函数对列表（包含名称、相似度及源代码）。
+- `results`: 聚类结果列表，每个项包含：
+    - `cluster_id`: 聚类编号，`-1` 表示噪声点。
+    - `cluster_type`: `cluster` 或 `noise`。
+    - `size`: 该簇内文件数量。
+    - `files`: 文件路径列表。
 
 ## 项目结构
 

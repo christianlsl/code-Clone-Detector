@@ -17,11 +17,14 @@ def test_interface():
     results = run_clone_detection(dir_path, config_path=config_path)
     
     if results:
-        print(f"Successfully found {len(results)} similar pairs.")
-        for pair in results[:2]: # Show first 2
-            print(f"- {pair['file_a']} <-> {pair['file_b']} (Sim: {pair['total_similarity']:.4f})")
+        print(f"Successfully found {len(results)} clusters (including noise cluster if any).")
+        for cluster in results[:2]:
+            print(
+                f"- Cluster {cluster['cluster_id']} [{cluster['cluster_type']}], "
+                f"size={cluster['size']}: {cluster['files']}"
+            )
     else:
-        print("No clones found or error occurred.")
+        print("No clusters found or error occurred.")
 
 if __name__ == "__main__":
     test_interface()
