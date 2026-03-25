@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import os
 from pathlib import Path
@@ -7,12 +8,48 @@ from typing import Any
 
 import torch
 from sklearn.cluster import DBSCAN
+from torch.nn.functional import cosine_similarity
 from tqdm import tqdm
 
 from src.tokenizer import FileEmbeddingResult, embed_file_blocks
 from src.unixcoder import UniXcoder
 
 logger = logging.getLogger(__name__)
+
+
+def _compare_functions(
+    result_a: FileEmbeddingResult,
+    result_b: FileEmbeddingResult,
+    threshold: float,
+) -> list[dict[str, Any]]:
+    funcs_a = [
+        (block, emb)
+        for block, emb in zip(result_a.blocks, result_a.block_embeddings)
+        if block.is_function
+    ]
+    funcs_b = [
+        (block, emb)
+        for block, emb in zip(result_b.blocks, result_b.block_embeddings)
+        if block.is_function
+    ]
+
+    similarities: list[dict[str, Any]] = []
+    for block_a, emb_a in funcs_a:
+        for block_b, emb_b in funcs_b:
+            sim = cosine_similarity(emb_a.unsqueeze(0), emb_b.unsqueeze(0)).item()
+            if sim >= threshold:
+                similarities.append(
+                    {
+                        "func_a": block_a.content,
+                        "name_a": block_a.name,
+                        "func_b": block_b.content,
+                        "name_b": block_b.name,
+                        "similarity": sim,
+                    }
+                )
+
+    similarities.sort(key=lambda x: x["similarity"], reverse=True)
+    return similarities
 
 
 def detect_clones(
@@ -86,14 +123,43 @@ def detect_clones(
         label_int = int(label)
         cluster_map.setdefault(label_int, []).append(file_path)
 
+    result_by_path = {str(res.file_path): res for res in results}
+
     clusters: list[dict[str, Any]] = []
     for label, files in sorted(cluster_map.items(), key=lambda item: item[0]):
+        pair_function_analysis: list[dict[str, Any]] = []
+
+        # Analyze function similarity only inside non-noise clusters with at least 2 files.
+        if label != -1 and len(files) >= 2:
+            for file_a, file_b in itertools.combinations(files, 2):
+                result_a = result_by_path[file_a]
+                result_b = result_by_path[file_b]
+                file_similarity = cosine_similarity(
+                    result_a.file_embedding.unsqueeze(0),
+                    result_b.file_embedding.unsqueeze(0),
+                ).item()
+                func_similarities = _compare_functions(result_a, result_b, threshold)
+                pair_function_analysis.append(
+                    {
+                        "file_a": file_a,
+                        "file_b": file_b,
+                        "total_similarity": file_similarity,
+                        "function_similarities": func_similarities,
+                    }
+                )
+
+            pair_function_analysis.sort(
+                key=lambda x: x["total_similarity"],
+                reverse=True,
+            )
+
         clusters.append(
             {
                 "cluster_id": label,
                 "cluster_type": "noise" if label == -1 else "cluster",
                 "size": len(files),
                 "files": files,
+                "pair_function_analysis": pair_function_analysis,
             }
         )
 
