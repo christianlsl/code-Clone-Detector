@@ -14,7 +14,7 @@ class AppConfig:
     similarity_threshold: float = 0.8
     dbscan_min_samples: int = 2
     model_name: str = "microsoft/unixcoder-base"
-    max_length: int = 512
+    max_length: int = 768
 
 
 def load_config(config_path: Path) -> AppConfig:
@@ -35,5 +35,5 @@ def load_config(config_path: Path) -> AppConfig:
         similarity_threshold=float(raw.get("similarity_threshold", 0.8)),
         dbscan_min_samples=int(raw.get("dbscan_min_samples", 2)),
         model_name=raw.get("model_name", "microsoft/unixcoder-base"),
-        max_length=int(raw.get("max_length", 512)),
+        max_length=int(raw.get("max_length", 768)),
     )

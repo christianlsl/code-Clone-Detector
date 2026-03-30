@@ -1,6 +1,6 @@
 model_name: microsoft/unixcoder-base
 model_local_path: models/unixcoder-base
-max_length: 512
+max_length: 768
 similarity_threshold: 0.95
 dbscan_min_samples: 2
 log_path: logs/process.log

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Iterator
 
 import torch
 from tree_sitter import Language, Parser
@@ -33,52 +34,118 @@ def _get_js_parser() -> Parser:
     return Parser(js_language)
 
 
+FUNCTION_NODE_TYPES = {
+    "function_declaration",
+    "function_expression",
+    "arrow_function",
+    "method_definition",
+    "generator_function_declaration",
+}
+
+
+def _iter_nodes(node) -> Iterator:
+    yield node
+    for child in node.children:
+        yield from _iter_nodes(child)
+
+
+def _decode_node_text(encoded_code: bytes, node) -> str:
+    return encoded_code[node.start_byte:node.end_byte].decode("utf8")
+
+
+def _is_require_declaration(node, encoded_code: bytes) -> bool:
+    if node.type not in {"variable_declaration", "lexical_declaration"}:
+        return False
+    return "require(" in _decode_node_text(encoded_code, node)
+
+
+def _extract_function_name(node, encoded_code: bytes) -> str | None:
+    name_node = node.child_by_field_name("name")
+    if name_node:
+        return _decode_node_text(encoded_code, name_node)
+
+    parent = node.parent
+    if not parent:
+        return None
+
+    # Object property functions, e.g. key: function() {} or key: () => {}
+    if parent.type == "pair":
+        key_node = parent.child_by_field_name("key")
+        if key_node:
+            return _decode_node_text(encoded_code, key_node)
+
+    # Variable assignments, e.g. const foo = () => {}
+    if parent.type == "variable_declarator":
+        var_name_node = parent.child_by_field_name("name")
+        if var_name_node:
+            return _decode_node_text(encoded_code, var_name_node)
+
+    # Assignment expressions, e.g. foo.bar = function() {}
+    if parent.type == "assignment_expression":
+        left_node = parent.child_by_field_name("left")
+        if left_node:
+            return _decode_node_text(encoded_code, left_node)
+
+    return None
+
+
+def _block_weight(block: CodeBlock) -> float:
+    if block.is_function:
+        return 1.0
+    if block.type == "import_statement":
+        return 0.2
+    if block.type in {"variable_declaration", "lexical_declaration"} and "require(" in block.content:
+        return 0.25
+    return 0.6
+
+
 def split_js_into_blocks(js_code: str) -> list[CodeBlock]:
-    """Split JavaScript source code into top-level syntax blocks."""
+    """Split JavaScript source code into weighted semantic blocks.
+
+    Function-like nodes are collected recursively so that object-property
+    functions and nested function expressions are not missed.
+    """
     parser = _get_js_parser()
     encoded_code = js_code.encode("utf8")
     tree = parser.parse(encoded_code)
 
     blocks: list[CodeBlock] = []
-    last_pos = 0
 
+    # Keep lightweight context blocks for imports/requires and down-weight later.
     for child in tree.root_node.children:
-        start_byte = last_pos
-        end_byte = child.end_byte
-        content = encoded_code[start_byte:end_byte].decode("utf8")
+        if child.type == "import_statement" or _is_require_declaration(child, encoded_code):
+            blocks.append(
+                CodeBlock(
+                    type=child.type,
+                    content=_decode_node_text(encoded_code, child),
+                    is_function=False,
+                    name=None,
+                )
+            )
 
-        # Try to extract a name for the block
-        name = None
-        if child.type in {"function_declaration", "method_definition", "class_declaration"}:
-            name_node = child.child_by_field_name("name")
-            if name_node:
-                name = encoded_code[name_node.start_byte:name_node.end_byte].decode("utf8")
-        elif child.type in {"variable_declaration", "lexical_declaration"}:
-            # Simplified: look for variable_declarator and get its name
-            for sub_child in child.children:
-                if sub_child.type == "variable_declarator":
-                    name_node = sub_child.child_by_field_name("name")
-                    if name_node:
-                        name = encoded_code[name_node.start_byte:name_node.end_byte].decode("utf8")
-                        break
-
+    # Recursively extract functions from the entire syntax tree.
+    for node in _iter_nodes(tree.root_node):
+        if node.type not in FUNCTION_NODE_TYPES:
+            continue
+        content = _decode_node_text(encoded_code, node)
+        if not content.strip():
+            continue
         blocks.append(
             CodeBlock(
-                type=child.type,
+                type=node.type,
                 content=content,
-                is_function=child.type
-                in {"function_declaration", "method_definition", "arrow_function"},
-                name=name,
+                is_function=True,
+                name=_extract_function_name(node, encoded_code),
             )
         )
-        last_pos = end_byte
 
-    if last_pos < len(encoded_code):
+    if not blocks:
         blocks.append(
             CodeBlock(
-                type="trailing",
-                content=encoded_code[last_pos:].decode("utf8"),
+                type="program",
+                content=js_code,
                 is_function=False,
+                name=None,
             )
         )
 
@@ -97,15 +164,26 @@ def get_block_embedding(
     model: UniXcoder,
     max_length: int,
 ) -> torch.Tensor:
-    """Get embedding for a single code block using UniXcoder."""
+    """Get embedding for a block, chunking long inputs then mean-pooling."""
     device = next(model.parameters()).device
-    tokens_ids = model.tokenize([block_text], max_length=max_length, mode="<encoder-only>")
+    token_budget = max(32, max_length - 4)
+    tokens = model.tokenizer.tokenize(block_text)
+
+    if len(tokens) <= token_budget:
+        texts = [block_text]
+    else:
+        token_chunks = [
+            tokens[i:i + token_budget]
+            for i in range(0, len(tokens), token_budget)
+        ]
+        texts = [model.tokenizer.convert_tokens_to_string(chunk) for chunk in token_chunks]
+
+    tokens_ids = model.tokenize(texts, max_length=max_length, mode="<encoder-only>")
     source_ids = torch.tensor(tokens_ids).to(device)
 
     with torch.no_grad():
         _, embedding = model(source_ids)
-        # embedding is the sentence representation from UniXcoder.
-        embedding = embedding.squeeze(0)
+        embedding = embedding.mean(dim=0)
 
     return embedding
 
@@ -132,7 +210,9 @@ def embed_file_blocks(
     if not block_embeddings:
         raise ValueError(f"No non-empty blocks found in file: {path}")
 
-    file_embedding = torch.stack(block_embeddings).mean(dim=0)
+    weights = torch.tensor([_block_weight(block) for block in valid_blocks], device=block_embeddings[0].device)
+    normalized_weights = weights / weights.sum()
+    file_embedding = (torch.stack(block_embeddings) * normalized_weights.unsqueeze(1)).sum(dim=0)
 
     return FileEmbeddingResult(
         file_path=path,

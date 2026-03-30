@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from sklearn.cluster import DBSCAN
 from torch.nn.functional import cosine_similarity
@@ -21,6 +22,7 @@ def _compare_functions(
     result_a: FileEmbeddingResult,
     result_b: FileEmbeddingResult,
     threshold: float,
+    top_k: int = 5,
 ) -> list[dict[str, Any]]:
     funcs_a = [
         (block, emb)
@@ -33,23 +35,63 @@ def _compare_functions(
         if block.is_function
     ]
 
-    similarities: list[dict[str, Any]] = []
-    for block_a, emb_a in funcs_a:
-        for block_b, emb_b in funcs_b:
-            sim = cosine_similarity(emb_a.unsqueeze(0), emb_b.unsqueeze(0)).item()
-            if sim >= threshold:
-                similarities.append(
-                    {
-                        "func_a": block_a.content,
-                        "name_a": block_a.name,
-                        "func_b": block_b.content,
-                        "name_b": block_b.name,
-                        "similarity": sim,
-                    }
-                )
+    if not funcs_a or not funcs_b:
+        return []
 
-    similarities.sort(key=lambda x: x["similarity"], reverse=True)
-    return similarities
+    candidates: list[tuple[float, int, int]] = []
+    for i, (block_a, emb_a) in enumerate(funcs_a):
+        for j, (block_b, emb_b) in enumerate(funcs_b):
+            sim = cosine_similarity(emb_a.unsqueeze(0), emb_b.unsqueeze(0)).item()
+            candidates.append((sim, i, j))
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    used_a: set[int] = set()
+    used_b: set[int] = set()
+    matches: list[dict[str, Any]] = []
+
+    for sim, i, j in candidates:
+        if i in used_a or j in used_b:
+            continue
+        used_a.add(i)
+        used_b.add(j)
+
+        block_a = funcs_a[i][0]
+        block_b = funcs_b[j][0]
+        matches.append(
+            {
+                "func_a": block_a.content,
+                "name_a": block_a.name,
+                "func_b": block_b.content,
+                "name_b": block_b.name,
+                "similarity": sim,
+                "above_threshold": sim >= threshold,
+            }
+        )
+        if len(matches) >= top_k:
+            break
+
+    return matches
+
+
+def _aggregate_function_similarity(
+    result_a: FileEmbeddingResult,
+    result_b: FileEmbeddingResult,
+    threshold: float,
+    top_k: int = 5,
+) -> tuple[float, list[dict[str, Any]]]:
+    matches = _compare_functions(result_a, result_b, threshold, top_k=top_k)
+    if matches:
+        aggregate = float(np.mean([match["similarity"] for match in matches]))
+        return aggregate, matches
+
+    # Fallback for files with no extractable functions; keep this low-weighted
+    # so boilerplate imports/requires do not dominate clustering.
+    file_level = cosine_similarity(
+        result_a.file_embedding.unsqueeze(0),
+        result_b.file_embedding.unsqueeze(0),
+    ).item()
+    return max(0.0, min(1.0, 0.35 * file_level)), []
 
 
 def detect_clones(
@@ -58,7 +100,7 @@ def detect_clones(
     dbscan_min_samples: int = 2,
     model_name: str = "microsoft/unixcoder-base",
     model_local_path: str | Path | None = None,
-    max_length: int = 512,
+    max_length: int = 768,
 ) -> list[dict[str, Any]]:
     """Clusters JavaScript files by semantic similarity using DBSCAN."""
     path = Path(dir_path)
@@ -89,11 +131,15 @@ def detect_clones(
         logger.warning("No .js files found in %s", path)
         return []
 
+    safe_max_length = min(max(8, int(max_length)), 1023)
+    if safe_max_length != max_length:
+        logger.warning("Adjusted max_length from %s to %s to fit model constraints.", max_length, safe_max_length)
+
     logger.info("Found %s .js files. Computing embeddings...", len(js_files))
     results: list[FileEmbeddingResult] = []
     for file_path in tqdm(js_files, desc="Embedding files"):
         try:
-            res = embed_file_blocks(file_path, model, max_length)
+            res = embed_file_blocks(file_path, model, safe_max_length)
             results.append(res)
         except ValueError as e:
             logger.warning("Skipping %s: %s", file_path, e)
@@ -105,25 +151,39 @@ def detect_clones(
         return []
 
     file_paths = [str(res.file_path) for res in results]
-    embedding_matrix = torch.stack([res.file_embedding for res in results]).detach().cpu().numpy()
 
     eps = max(0.0, 1.0 - threshold)
     logger.info(
-        "Clustering %s files using DBSCAN (metric=cosine, eps=%.4f, min_samples=%s)...",
+        "Clustering %s files using DBSCAN (metric=precomputed, eps=%.4f, min_samples=%s)...",
         len(results),
         eps,
         dbscan_min_samples,
     )
 
-    dbscan = DBSCAN(eps=eps, min_samples=dbscan_min_samples, metric="cosine")
-    labels = dbscan.fit_predict(embedding_matrix)
+    pair_cache: dict[tuple[int, int], tuple[float, list[dict[str, Any]]]] = {}
+    distance_matrix = np.zeros((len(results), len(results)), dtype=np.float32)
+    for i in range(len(results)):
+        for j in range(i + 1, len(results)):
+            aggregate, matches = _aggregate_function_similarity(
+                results[i],
+                results[j],
+                threshold=threshold,
+                top_k=5,
+            )
+            pair_cache[(i, j)] = (aggregate, matches)
+            distance = max(0.0, min(1.0, 1.0 - aggregate))
+            distance_matrix[i, j] = distance
+            distance_matrix[j, i] = distance
+
+    dbscan = DBSCAN(eps=eps, min_samples=dbscan_min_samples, metric="precomputed")
+    labels = dbscan.fit_predict(distance_matrix)
 
     cluster_map: dict[int, list[str]] = {}
     for file_path, label in zip(file_paths, labels):
         label_int = int(label)
         cluster_map.setdefault(label_int, []).append(file_path)
 
-    result_by_path = {str(res.file_path): res for res in results}
+    path_to_index = {str(res.file_path): idx for idx, res in enumerate(results)}
 
     clusters: list[dict[str, Any]] = []
     for label, files in sorted(cluster_map.items(), key=lambda item: item[0]):
@@ -132,13 +192,10 @@ def detect_clones(
         # Analyze function similarity only inside non-noise clusters with at least 2 files.
         if label != -1 and len(files) >= 2:
             for file_a, file_b in itertools.combinations(files, 2):
-                result_a = result_by_path[file_a]
-                result_b = result_by_path[file_b]
-                file_similarity = cosine_similarity(
-                    result_a.file_embedding.unsqueeze(0),
-                    result_b.file_embedding.unsqueeze(0),
-                ).item()
-                func_similarities = _compare_functions(result_a, result_b, threshold)
+                idx_a = path_to_index[file_a]
+                idx_b = path_to_index[file_b]
+                cache_key = (idx_a, idx_b) if idx_a < idx_b else (idx_b, idx_a)
+                file_similarity, func_similarities = pair_cache[cache_key]
                 pair_function_analysis.append(
                     {
                         "file_a": file_a,
