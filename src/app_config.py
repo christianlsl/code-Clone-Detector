@@ -11,6 +11,7 @@ class AppConfig:
     log_path: Path
     output_path: Path
     model_local_path: Path
+    embedding_path: Path
     similarity_threshold: float = 0.8
     dbscan_min_samples: int = 2
     model_name: str = "microsoft/unixcoder-base"
@@ -27,11 +28,13 @@ def load_config(config_path: Path) -> AppConfig:
     log_path = Path(raw.get("log_path", "logs/process.log"))
     output_path = Path(raw.get("output_path", "output/results.json"))
     model_local_path = Path(raw.get("model_local_path", "models/unixcoder-base"))
+    embedding_path = Path(raw.get("embedding_path", "output/embeddings/"))
 
     return AppConfig(
         log_path=log_path,
         output_path=output_path,
         model_local_path=model_local_path,
+        embedding_path=embedding_path,
         similarity_threshold=float(raw.get("similarity_threshold", 0.8)),
         dbscan_min_samples=int(raw.get("dbscan_min_samples", 2)),
         model_name=raw.get("model_name", "microsoft/unixcoder-base"),
