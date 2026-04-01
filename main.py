@@ -6,49 +6,12 @@ import logging
 import time
 from pathlib import Path
 from typing import Any
-import shutil
-import tempfile
 
 from src.app_config import load_config
 from src.clone_detection import detect_clones, compare_embeddings
 from src.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
-
-
-def run_clone_detection_on_files(
-    files: list[Path],
-    config: Any,
-    embedding_prefix: str = "embeddings",
-) -> list[dict[str, Any]]:
-    if not files:
-        return []
-
-    # temporary directory to hold copies of files for detect_clones since it expects a directory
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_dir_path = Path(temp_dir)
-        for i, f in enumerate(files):
-            if f.exists():
-                dest = temp_dir_path / f"{i}_{f.name}"
-                shutil.copy2(f, dest)
-
-        logger.info(f"Starting clone detection on {len(files)} files.")
-        start_time = time.time()
-        
-        clusters, _ = detect_clones(
-            dir_path=temp_dir_path,
-            threshold=config.similarity_threshold,
-            dbscan_min_samples=config.dbscan_min_samples,
-            model_name=config.model_name,
-            model_local_path=config.model_local_path,
-            max_length=config.max_length,
-            save_embeddings_dir=config.embedding_path,
-            embedding_prefix=embedding_prefix,
-        )
-
-    duration = time.time() - start_time
-    logger.info(f"Clone detection completed in {duration:.2f}s.")
-    return clusters
 
 
 def run_mode_1(dir_path: str | Path, config_path: str | Path = "config.yaml") -> list[dict[str, Any]]:
@@ -64,11 +27,14 @@ def run_mode_1(dir_path: str | Path, config_path: str | Path = "config.yaml") ->
         logger.error(f"Directory not found: {dir_path}")
         return []
 
+    # Extract all .js files
+    js_files = list(dir_path.rglob("*.js"))
+
     # Generate embedding prefix based on directory name
     embedding_prefix = dir_path.name or "mode1"
 
     clusters, results = detect_clones(
-        dir_path=dir_path,
+        files_list=js_files,
         threshold=config.similarity_threshold,
         dbscan_min_samples=config.dbscan_min_samples,
         model_name=config.model_name,
@@ -110,12 +76,14 @@ def run_mode_0(dir_path: str | Path, config_path: str | Path = "config.yaml") ->
 
     logger.info(f"[Mode 0] Starting batch clone detection on projects in: {root_path}")
     for project_dir in root_path.iterdir():
+
         if not project_dir.is_dir():
             continue
             
         project_name = project_dir.name
         modules_dir = project_dir / "modules"
-        
+        logger.info(f"Processing project: {project_name}")
+
         if not modules_dir.is_dir():
             continue
 
@@ -158,20 +126,38 @@ def run_mode_0(dir_path: str | Path, config_path: str | Path = "config.yaml") ->
         
         if page_files:
             logger.info(f"Processing PAGE files for project {project_name}")
-            project_results["PAGE_results"] = run_clone_detection_on_files(
-                page_files,
-                config,
-                embedding_prefix=f"{project_name}_page"
+            start_time = time.time()
+            clusters, _ = detect_clones(
+                files_list=page_files,
+                threshold=config.similarity_threshold,
+                dbscan_min_samples=config.dbscan_min_samples,
+                model_name=config.model_name,
+                model_local_path=config.model_local_path,
+                max_length=config.max_length,
+                save_embeddings_dir=config.embedding_path,
+                embedding_prefix=f"{project_name}_page",
             )
+            duration = time.time() - start_time
+            logger.info(f"Clone detection for PAGE completed in {duration:.2f}s.")
+            project_results["PAGE_results"] = clusters
             has_run = True
             
         if service_files:
             logger.info(f"Processing SERVICE files for project {project_name}")
-            project_results["SERVICE_results"] = run_clone_detection_on_files(
-                service_files,
-                config,
-                embedding_prefix=f"{project_name}_service"
+            start_time = time.time()
+            clusters, _ = detect_clones(
+                files_list=service_files,
+                threshold=config.similarity_threshold,
+                dbscan_min_samples=config.dbscan_min_samples,
+                model_name=config.model_name,
+                model_local_path=config.model_local_path,
+                max_length=config.max_length,
+                save_embeddings_dir=config.embedding_path,
+                embedding_prefix=f"{project_name}_service",
             )
+            duration = time.time() - start_time
+            logger.info(f"Clone detection for SERVICE completed in {duration:.2f}s.")
+            project_results["SERVICE_results"] = clusters
             has_run = True
 
         if has_run:

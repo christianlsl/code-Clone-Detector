@@ -312,7 +312,7 @@ def _aggregate_function_similarity(
 
 
 def detect_clones(
-    dir_path: str | Path,
+    files_list: list[str | Path],
     threshold: float = 0.8,
     dbscan_min_samples: int = 2,
     model_name: str = "microsoft/unixcoder-base",
@@ -328,9 +328,10 @@ def detect_clones(
         tuple of (clusters, results) where clusters is the clustering result
         and results is the list of FileEmbeddingResult objects.
     """
-    path = Path(dir_path)
-    if not path.is_dir():
-        raise NotADirectoryError(f"Directory not found: {path}")
+    js_files = [Path(f) for f in files_list if Path(f).is_file()]
+    if not js_files:
+        logger.warning("No valid files found in the provided list.")
+        return [], []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Using device: %s", device)
@@ -350,11 +351,6 @@ def detect_clones(
 
     model.to(device)
     model.eval()
-
-    js_files = [f for f in path.rglob("*.js") if f.is_file()]
-    if not js_files:
-        logger.warning("No .js files found in %s", path)
-        return [], []
 
     safe_max_length = min(max(8, int(max_length)), 1023)
     if safe_max_length != max_length:
