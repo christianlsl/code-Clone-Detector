@@ -186,8 +186,7 @@ class ResultParser:
             Extracted code snippet or empty string on failure
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            lines = self._read_lines_with_fallback(file_path)
             if start_line < 1 or end_line < start_line:
                 return ""
             snippet = lines[start_line - 1:end_line]
@@ -195,6 +194,39 @@ class ResultParser:
         except Exception as e:
             logger.warning(f"Failed to extract code from {file_path}:{start_line}-{end_line}: {e}")
             return ""
+
+    def _read_lines_with_fallback(self, file_path: str) -> List[str]:
+        """
+        Read file lines with encoding fallback for mixed-language datasets.
+
+        Args:
+            file_path: Source file path
+
+        Returns:
+            File lines with newline characters preserved
+        """
+        with open(file_path, 'rb') as f:
+            raw = f.read()
+
+        encodings = ["utf-8", "gb18030", "latin-1"]
+        last_error = None
+
+        for encoding in encodings:
+            try:
+                text = raw.decode(encoding)
+                return text.splitlines(keepends=True)
+            except UnicodeDecodeError as e:
+                last_error = e
+
+        # This branch should be unreachable because latin-1 can decode any byte,
+        # but keep explicit failure for defensive programming.
+        raise UnicodeDecodeError(
+            "unknown",
+            raw,
+            0,
+            1,
+            f"Unable to decode {file_path}: {last_error}"
+        )
     
     def _normalize_path(self, file_path: str) -> str:
         """
