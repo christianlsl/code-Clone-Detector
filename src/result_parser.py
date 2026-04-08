@@ -132,7 +132,8 @@ class ResultParser:
         Returns:
             Clone group in output format
         """
-        func_paths: Dict[str, List[List[int]]] = {}
+        func_group: List[Dict[str, Any]] = []
+        func_index_map: Dict[int, Dict[str, Any]] = {}
         projects: Set[str] = set()
         
         for idx in indices:
@@ -145,26 +146,55 @@ class ResultParser:
             # Normalize path
             normalized_path = self._normalize_path(file_path)
             if normalized_path:
-                if normalized_path not in func_paths:
-                    func_paths[normalized_path] = []
-                func_paths[normalized_path].append([start_line, end_line])
+                code = self._extract_code(file_path, start_line, end_line)
+                func_entry = {
+                    "file_path": normalized_path,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "code": code,
+                }
+                func_group.append(func_entry)
+                func_index_map[idx] = func_entry
                 
                 # Extract project name
                 project = self._extract_project_name(normalized_path)
                 if project:
                     projects.add(project)
         
-        if not func_paths:
+        if not func_group:
             return None
         
         # Build pair similarities
-        pair_similarities = self._build_pair_similarities(indices)
+        pair_similarities = self._build_pair_similarities(indices, func_index_map)
         
         return {
-            "func_paths": func_paths,
+            "func_group": func_group,
             "relevent_projects": sorted(list(projects)),
             "pair_similarity": pair_similarities
         }
+
+    def _extract_code(self, file_path: str, start_line: int, end_line: int) -> str:
+        """
+        Extract source code from file by line range.
+
+        Args:
+            file_path: Absolute file path from MeasureIndex.csv
+            start_line: 1-based start line
+            end_line: 1-based end line
+
+        Returns:
+            Extracted code snippet or empty string on failure
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            if start_line < 1 or end_line < start_line:
+                return ""
+            snippet = lines[start_line - 1:end_line]
+            return ''.join(snippet).rstrip('\n')
+        except Exception as e:
+            logger.warning(f"Failed to extract code from {file_path}:{start_line}-{end_line}: {e}")
+            return ""
     
     def _normalize_path(self, file_path: str) -> str:
         """
@@ -221,7 +251,11 @@ class ResultParser:
             return parts[0]
         return ""
     
-    def _build_pair_similarities(self, indices: List[int]) -> List[Dict[str, Any]]:
+    def _build_pair_similarities(
+        self,
+        indices: List[int],
+        func_index_map: Dict[int, Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Build pair similarity information.
 
@@ -247,12 +281,23 @@ class ResultParser:
                 )
                 
                 if similarity_score is not None:
+                    left_entry = func_index_map.get(idx1)
+                    right_entry = func_index_map.get(idx2)
+                    if not left_entry or not right_entry:
+                        continue
                     similarities.append({
-                        "index_pair": [idx1, idx2],
+                        "index_pair": [
+                            self._build_func_identifier(left_entry),
+                            self._build_func_identifier(right_entry),
+                        ],
                         "similarity": similarity_score
                     })
         
         return similarities
+
+    def _build_func_identifier(self, func_entry: Dict[str, Any]) -> str:
+        """Build a stable identifier for a function entry."""
+        return f"{func_entry['file_path']}_{func_entry['start_line']}_{func_entry['end_line']}"
     
     def save_results(self, results: List[Dict[str, Any]], output_file: Path) -> None:
         """
