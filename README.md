@@ -66,7 +66,7 @@ testcases/
 ### 依赖
 
 - Python 3.12+
-- Java Runtime Environment
+- JDK 1.8 or higher 
 - `pyyaml`
 
 ### 安装 Python 依赖
@@ -78,6 +78,10 @@ pip install pyyaml
 如果使用虚拟环境，建议先激活后再安装依赖。
 
 ## 运行方式
+
+### 选择系统对应saga脚本
+
+在`thirdparty/saga/executable`中选取与运行操作系统对应的脚本，填入`thirdparty/saga/config.properties`中`exe`字段
 
 ### 基础运行
 
