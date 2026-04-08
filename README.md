@@ -1,151 +1,417 @@
-# Code Clone Detector (基于 UniXcoder 的 JS 代码克隆检测工具)
+# JS 代码克隆检测器
 
-本项目是一款针对 JavaScript 源码的克隆检测工具。它利用 **UniXcoder** 模型提取代码语义特征，并结合 **DBSCAN** 对文件向量进行无监督聚类，自动发现相似代码簇。
+基于 SAGA 的 JavaScript 代码克隆检测工具。
 
-## 核心特性
+## 1. 功能说明
 
-- **结构化拆分**：使用 Tree-sitter 对 JavaScript 代码进行解析，自动拆分为顶层代码块（函数声明、类、变量定义等）。
-- **语义嵌入**：集成 UniXcoder 模型，通过 `<encoder-only>` 模式为每个代码块生成高维语义向量。
-- **批量递归检测**：支持递归扫描指定目录下的所有 `.js` 文件。
-- **DBSCAN 聚类**：基于余弦距离对文件级 embedding 自动聚类，无需预设聚类数量。
-- **可调聚类粒度**：通过相似度阈值与 `dbscan_min_samples` 控制聚类松紧和最小簇规模。
-- **模型本地化**：支持自动下载并保存 UniXcoder 模型到本地，后续运行无需联网，极速加载。
-- **结构化输出**：处理过程详细记录于日志文件，最终比对结果以 JSON 格式保存，方便集成和二次分析。
+- 从 `config.yaml` 读取 `data_path`、`output_path`、`log_path`
+- 支持通过命令行参数覆盖配置（包含 `-i/--input`）
+- 运行 SAGA：`java -jar thirdparty/saga/SAGACloneDetector.jar {data_path}`
+- 自动清理 SAGA 历史输出目录：`result`、`tokenData`、`logs`
+- 解析 SAGA 结果并输出 JSON
 
-## 环境要求
-
-- Python >= 3.12
-- 依赖项：`torch`, `transformers`, `tree-sitter`, `tree-sitter-javascript`, `pyyaml` 等（详见 `pyproject.toml`）。
-
-推荐使用 [uv](https://github.com/astral-sh/uv) 管理环境。
-
-## 配置说明 (`config.yaml`)
-
-修改项目根目录下的 `config.yaml` 来调整模型和输出相关的运行参数：
-
-```yaml
-model_name: microsoft/unixcoder-base # 模型名 (Hugging Face)
-model_local_path: models/unixcoder-base # 模型本地保存/加载路径
-max_length: 512                      # Token 最大长度
-similarity_threshold: 0.9            # 相似度阈值 (0-1)，内部转换为 DBSCAN eps=1-threshold
-dbscan_min_samples: 2                # DBSCAN 最小样本数
-log_path: logs/process.log           # 日志输出路径
-output_path: output/results.json     # 结果 JSON 保存路径
-```
-
-## 快速开始
-
-1. **安装依赖**：
-   ```bash
-   uv sync
-   ```
-   + 初次使用如遇网络问题，建议使用 mirror 源
-    在 `.venv/lib/python3.12/site-packages/huggingface_hub` 中找到 `constants.py`
-    ```python
-    # 将原来的默认网址修改为镜像网址
-    # _HF_DEFAULT_ENDPOINT = "https://huggingface.co"
-    _HF_DEFAULT_ENDPOINT = "https://hf-mirror.com"
-    ```
-
-2. **命令行运行检测**：
-
-   该工具提供两种运行模式，默认为 **模式 0**（项目批量检测模式）。
-
-   **模式 0：项目批量检测（默认模式）**
-   适用于包含多个子项目的根目录。程序会根据预定义的目录结构自动识别每个项目中的 `PAGE` 和 `SERVICE` 文件并分别进行分析：
-   ```bash
-   uv run python main.py [你的项目根目录路径]
-   //等同于uv run python main.py [你的项目根目录路径] --mode 0
-   ```
-   例如：
-   ```bash
-   uv run python main.py dataset/projects --mode 0
-   ```
-
-   **模式 1：单目录递归检测**
-   适用于普通的 JS 代码文件夹，会对该目录及其子目录下所有 `.js` 文件进行统一分析：
-   ```bash
-   uv run python main.py [你的代码目录路径] --mode 1
-   ```
-   例如：
-   ```bash
-   uv run python main.py dataset/crcn --mode 1
-   ```
-
-3. **作为 Python 库调用**：
-   你可以直接在代码中导入并使用相应的模式函数：
-   ```python
-   from main import run_mode_1, run_mode_0
-
-   # 运行单目录检测
-   results = run_mode_1("dataset/crcn")
-
-   # 运行项目批量检测
-   run_mode_0("dataset/projects")
-   ```
-
-## 运行模式说明
-
-### 模式 0：项目批量检测
-该模式专门为具有特定结构的低代码项目设计。它会扫描输入目录下的每个子文件夹（代表一个项目），并提取其中的 `PAGE` 和 `SERVICE` 脚本进行独立分析。
-
-- **目录结构要求**：
-    每个项目文件夹必须包含 `modules` 子目录。
-    ```text
-    {root_path}/
-    ├── {project_A}/
-    │   └── modules/
-    │       ├── {module1}/
-    │       │   └── general_work/
-    │       │       ├── PAGE/
-    │       │       │   └── script/
-    │       │       │       └── *.js
-    │       │       └── SERVICE/
-    │       │           └── **/*.js
-    ...
-    ```
-- **分类逻辑**：
-    - `PAGE` 脚本：位于 `modules/*/general_work/PAGE/script/*.js`
-    - `SERVICE` 脚本：位于 `modules/*/general_work/SERVICE/**/*.js`
-- **输出**：为每个项目生成一个单独的 JSON 结果文件，例如 `output/project_A_results.json`，其中包含 `PAGE_results` 和 `SERVICE_results`。
-
-### 模式 1：单目录递归检测
-这是传统的文件夹扫描模式。
-- **逻辑**：递归扫描指定目录下的所有 `.js` 文件，不进行 `PAGE` 或 `SERVICE` 的分类，将所有文件作为一个整体进行克隆检测。
-- **输出**：生成一个全局结果文件，路径由 `config.yaml` 中的 `output_path` 指定。
-
-## 输出结果说明
-
-### 日志 (`logs/process.log`)
-记录了程序的运行状态、设备信息、模型加载情况以及详细的文件处理进度。
-
-### 结果文件 (`output/*.json`)
-
-#### 模式 1 的输出结果
-包含以下结构的详细数据：
-- `config`: 运行时使用的配置快照。
-- `results`: 聚类结果列表。
-
-#### 模式 0 的输出结果 (`{project_name}_results.json`)
-- `config`: 运行时使用的配置快照。
-- `PAGE_results`: 该项目中 `PAGE` 类型脚本的聚类结果。
-- `SERVICE_results`: 该项目中 `SERVICE` 类型脚本的聚类结果。
-
-每个聚类结果项包含：
-- `cluster_id`: 聚类编号，`-1` 表示噪声点。
-- `cluster_type`: `cluster` 或 `noise`。
-- `size`: 该簇内文件数量。
-- `files`: 文件路径列表。
-
-## 项目结构
+## 2. 目录结构
 
 ```text
 .
+├── main.py
+├── config.yaml
 ├── src/
-│   ├── tokenizer.py    # 代码分块、命名提取与 Embedding 生成
-│   ├── calculate.py    # 相似度计算核心逻辑
-│   └── unixcoder.py    # UniXcoder 模型封装类
-├── main.py             # 程序主入口与批量处理接口
-├── config.yaml         # 配置文件
-└── pyproject.toml      # 项目配置与依赖管理
+│   ├── config.py
+│   ├── logger_setup.py
+│   ├── saga_runner.py
+│   ├── result_parser.py
+│   └── pipeline.py
+└── thirdparty/saga/
+    └── SAGACloneDetector.jar
 ```
+
+## 3. 配置文件
+
+`config.yaml` 示例：
+
+```yaml
+data_path: ./testcases
+output_path: ./output
+log_path: ./logs
+```
+
+`data_path` 下每个子目录视为一个项目，目录名建议为 `{num}.{project_name}`，例如：
+
+```text
+testcases/
+├── 01.datahub/
+├── 02.sdm_df/
+└── 2.inf_cent/
+```
+
+## 4. 运行方式
+
+### 4.1 基础运行
+
+```bash
+python3 main.py
+```
+
+### 4.2 指定输入路径（新增）
+
+```bash
+python3 main.py -i /path/to/js_projects
+```
+
+说明：`-i/--input` 会覆盖 `config.yaml` 里的 `data_path`。
+
+### 4.3 常用组合
+
+```bash
+python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
+```
+
+### 4.4 参数列表
+
+| 参数                | 含义                                            |
+| ------------------- | ----------------------------------------------- |
+| `-c`, `--config`    | 配置文件路径，默认 `config.yaml`                |
+| `-i`, `--input`     | 输入目录（JS 项目根目录），覆盖 `data_path`     |
+| `-o`, `--output`    | 输出 JSON 文件路径，覆盖 `output_path` 默认文件 |
+| `-l`, `--log-level` | 日志级别：`DEBUG/INFO/WARNING/ERROR`            |
+
+## 5. 输出结果格式
+
+输出文件默认位于：`output/clone_detection_result.json`
+
+```json
+[
+  {
+    "func_paths": {
+      "01.datahub/modules/split/ngModel.js": [
+        [120, 160],
+        [300, 340]
+      ],
+      "02.sdm_df/messageFormatParser.js": [[80, 110]]
+    },
+    "relevent_projects": ["datahub", "sdm_df"],
+    "pair_similarity": [
+      {
+        "index_pair": [10, 25],
+        "similarity": 0.9354839
+      }
+    ]
+  }
+]
+```
+
+说明：
+
+- `func_paths` 现在按“文件路径 -> 函数区间列表”存储，避免同一文件多个函数被覆盖。
+- `relevent_projects` 按 `{num}.{project_name}` 提取项目名（仅保留 `project_name`）。
+
+## 6. 执行流程
+
+1. 读取配置和命令行参数
+2. 清理 `thirdparty/saga` 下旧的 `result`、`tokenData`、`logs`
+3. 调用 SAGA 分析 `data_path`
+4. 解析：
+   - `type123_method_group_result.csv`
+   - `MeasureIndex.csv`
+   - `type123_method_pair_result.csv`
+5. 写出 JSON 结果
+
+## 7. 依赖
+
+- Python >= 3.12
+- Java 运行环境
+- `pyyaml`
+
+安装依赖：
+
+```bash
+pip install pyyaml
+```
+
+## 8. 常见问题
+
+### 8.1 找不到 SAGA JAR
+
+确认文件存在：
+
+```bash
+ls thirdparty/saga/SAGACloneDetector.jar
+```
+
+### 8.2 没有输出结果
+
+- 检查 `data_path` 是否存在 JS 文件
+- 检查日志目录中的日志文件
+- 用 `-l DEBUG` 运行查看详细日志
+
+### 8.3 Java 不可用
+
+确认 Java 已安装：
+
+```bash
+java -version
+```
+
+**Key Class**: `Config`
+
+- Loads configuration from YAML file
+- Provides properties for data_path, output_path, log_path
+
+### logger_setup.py
+
+Sets up logging with both console and file handlers.
+
+**Key Function**: `setup_logger()`
+
+- Configures logging with specified level
+- Creates log files in the specified directory
+
+### saga_runner.py
+
+Manages SAGA program execution and cleanup.
+
+**Key Class**: `SAGARunner`
+
+- Verifies SAGA JAR exists
+- Cleans previous output directories
+- Executes SAGA with error handling
+- 1-hour timeout to prevent infinite runs
+
+### result_parser.py
+
+Parses SAGA output files and generates JSON results.
+
+**Key Class**: `ResultParser`
+
+- Loads MeasureIndex.csv (function locations)
+- Loads pair similarity scores
+- Groups related clones
+- Extracts project names from paths
+- Generates structured JSON output
+
+### pipeline.py
+
+Orchestrates the entire clone detection process.
+
+**Key Class**: `CloneDetectionPipeline`
+
+- Coordinates all pipeline steps
+- Provides clean error handling and logging
+- Returns success/failure status
+
+## Error Handling
+
+- Configuration file validation
+- SAGA JAR existence verification
+- Result file existence checking
+- Graceful handling of malformed data
+- Detailed error logging
+
+## Dependencies
+
+- **Python**: >= 3.12
+- **PyYAML**: >= 6.0 (for YAML parsing)
+- **Java**: Required for running SAGA
+- **SAGA**: SAGACloneDetector.jar in `thirdparty/saga/`
+
+## Requirements
+
+The system requires:
+
+1. Java Runtime Environment (JRE) for SAGA execution
+2. `SAGACloneDetector.jar` in the `thirdparty/saga/` directory
+3. Write permissions for output and log directories
+
+## Examples
+
+### Example 1: Basic Clone Detection
+
+Detect clones in JavaScript files using default configuration:
+
+```bash
+python3 main.py
+```
+
+Results will be saved to `./output/clone_detection_result.json` (as specified in config.yaml).
+
+### Example 2: Scan Multiple Project Directories
+
+Process different JavaScript projects:
+
+```bash
+# Scan project A
+python3 main.py -i ./projects/project_a -o result_a.json
+
+# Scan project B
+python3 main.py -i ./projects/project_b -o result_b.json
+```
+
+### Example 3: Debug Mode
+
+Run with detailed logging:
+
+```bash
+python3 main.py -l DEBUG
+```
+
+Logs will be saved to `./logs/clone_detector.log` (as specified in config.yaml).
+
+### Example 4: Custom Configuration
+
+Use alternative configuration file:
+
+```bash
+python3 main.py -c config_production.yaml
+```
+
+### Example 5: Parse Results Programmatically
+
+```python
+import json
+
+with open('output/clone_detection_result.json') as f:
+    results = json.load(f)
+
+for i, group in enumerate(results):
+    print(f"Clone Group {i+1}:")
+    print(f"  Files: {len(group['func_paths'])}")
+    print(f"  Projects: {group['relevent_projects']}")
+    for file_path, lines in group['func_paths'].items():
+        print(f"    {file_path}: lines {lines[0]}-{lines[1]}")
+```
+
+## Output Analysis
+
+### JSON Structure
+
+Each clone group in the output contains:
+
+- **func_paths**: Dictionary mapping relative file paths to [start_line, end_line] pairs
+- **relevent_projects**: List of project names where clones are found
+- **pair_similarity**: List of similarity scores between function pairs
+
+### Example Output
+
+```json
+{
+  "func_paths": {
+    "project_a/utils.js": [10, 25],
+    "project_b/helpers.js": [5, 20]
+  },
+  "relevent_projects": ["project_a", "project_b"],
+  "pair_similarity": [
+    {
+      "index_pair": [0, 1],
+      "similarity": 0.9354839
+    }
+  ]
+}
+```
+
+## Troubleshooting
+
+### Issue: "SAGACloneDetector.jar not found"
+
+**Solution**: Ensure the JAR file exists at `thirdparty/saga/SAGACloneDetector.jar`
+
+```bash
+ls -la thirdparty/saga/SAGACloneDetector.jar
+```
+
+### Issue: "No module named src"
+
+**Solution**: Run the program from the project root directory
+
+```bash
+cd /path/to/code-Clone-Detector
+python3 main.py
+```
+
+### Issue: Java command not found
+
+**Solution**: Install Java Runtime Environment (JRE)
+
+```bash
+# macOS
+brew install openjdk
+
+# Ubuntu/Debian
+sudo apt-get install default-jre
+
+# Verify installation
+java -version
+```
+
+### Issue: Permission denied for log/output directories
+
+**Solution**: Ensure write permissions
+
+```bash
+chmod -R 755 ./logs ./output
+```
+
+### Issue: Output file not created
+
+**Solution**: Check error logs
+
+```bash
+cat logs/clone_detector.log
+```
+
+Run with debug logging for more details:
+
+```bash
+python3 main.py -l DEBUG 2>&1 | tee debug_output.log
+```
+
+## Environment
+
+### Tested On
+
+- Python 3.12+
+- macOS 10.15+
+- Ubuntu 20.04+
+- Windows 10+ (with Python and Java installed)
+
+### Directory Structure Validation
+
+The program expects the following structure:
+
+```
+code-Clone-Detector/
+├── main.py
+├── config.yaml
+├── src/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── logger_setup.py
+│   ├── saga_runner.py
+│   ├── result_parser.py
+│   └── pipeline.py
+├── thirdparty/
+│   └── saga/
+│       └── SAGACloneDetector.jar
+└── testcases/
+    ├── 01.project_name/
+    │   └── *.js
+    └── 02.another_project/
+        └── *.js
+```
+
+## Performance Considerations
+
+- **Large datasets**: SAGA execution time depends on the number and size of files
+- **Memory**: Java heap size can be adjusted by modifying SAGA execution parameters
+- **Timeouts**: The pipeline has a 1-hour timeout for SAGA execution
+- **Storage**: Ensure sufficient disk space for SAGA intermediate files and output
+
+## Contributing
+
+When modifying the code:
+
+1. Maintain low coupling and high cohesion principles
+2. Add docstrings to all functions and classes
+3. Use type hints for better code clarity
+4. Test changes before committing
+5. Update documentation as needed

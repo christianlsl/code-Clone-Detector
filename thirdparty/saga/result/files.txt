@@ -1,0 +1,10 @@
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/2.inf_cent/animateCss.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/2.inf_cent/ngSwitchSpec.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/2.inf_cent/angular-locale_gv.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/2.inf_cent/http.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/02.sdm_df/promises-aplus-test-adapter.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/02.sdm_df/angular-locale_pt-ch.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/02.sdm_df/messageFormatParser.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/01.datahub/modules/split/angular-locale_en-fi.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/01.datahub/modules/split/ngModel.js
+/Users/silulyu/Library/CloudStorage/OneDrive-shu.edu.cn/lsl/document/CodeWisdom/lowcode-digitaltwin/code-Clone-Detector/testcases/01.datahub/modules/test1/angularFiles.js

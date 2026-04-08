@@ -13,3 +13,4 @@ dataset/
 models/
 logs/
 output/
+.DS_Store
