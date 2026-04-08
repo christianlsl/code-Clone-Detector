@@ -21,29 +21,32 @@ def setup_logger(
     Returns:
         Configured logger instance
     """
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    
+    # Configure root logger so all module loggers (e.g. src.pipeline) are visible.
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    # Avoid duplicate logs when setup_logger is called multiple times.
+    root_logger.handlers.clear()
+
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(level)
-    console_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
     # File handler
     if log_path:
         log_path = Path(log_path)
         log_path.mkdir(parents=True, exist_ok=True)
-        
+
         file_handler = logging.FileHandler(log_path / f'{name}.log')
         file_handler.setLevel(level)
-        file_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
-    
-    return logger
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    # Return requested named logger for compatibility with existing callers.
+    return logging.getLogger(name)
