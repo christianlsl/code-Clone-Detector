@@ -1,12 +1,14 @@
 """Main pipeline for clone detection."""
 
+import json
+import logging
 from pathlib import Path
 from typing import Optional
-import logging
 
 from .config import Config
 from .saga_runner import SAGARunner
 from .result_parser import ResultParser
+from .llm_client import LLMClient
 
 
 logger = logging.getLogger(__name__)
@@ -63,9 +65,13 @@ class CloneDetectionPipeline:
             results = parser.parse()
             
             logger.info(f"Found {len(results)} clone groups")
+
+            # Step 4: Summarize clone groups with LLM
+            logger.info("Step 3: Summarizing clone groups with LLM...")
+            self._summarize_results(results)
             
-            # Step 4: Save results
-            logger.info("Step 3: Saving results...")
+            # Step 5: Save results
+            logger.info("Step 4: Saving results...")
             parser.save_results(results, output_file)
             
             logger.info("Clone detection completed successfully")
@@ -74,3 +80,53 @@ class CloneDetectionPipeline:
         except Exception as e:
             logger.error(f"Pipeline failed: {e}", exc_info=True)
             return False
+
+    def _summarize_results(self, results: list[dict]) -> None:
+        """Use llm_client to summarize each func_group in-place."""
+        try:
+            llm_client = LLMClient()
+        except Exception as e:
+            logger.warning(f"LLM client unavailable, skip func_group summary: {e}")
+            return
+
+        for index, result in enumerate(results, start=1):
+            func_group = result.get("func_group", [])
+            if not func_group:
+                result["summary"] = None
+                continue
+
+            logger.info(f"Summarizing clone group {index}/{len(results)}")
+            summary = llm_client.summarize_func_group(func_group)
+            result["summary"] = self._parse_summary_json(summary)
+
+    def _parse_summary_json(self, summary: Optional[str]) -> Optional[dict]:
+        """Parse LLM summary response into a JSON object."""
+        if not summary:
+            return None
+
+        text = summary.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse LLM summary as JSON: {e}")
+            return None
+
+        required_keys = ["共同职责", "共同功能", "主要差异点", "可能的复用方向"]
+        if not isinstance(data, dict):
+            logger.warning("LLM summary is not a JSON object")
+            return None
+
+        normalized = {}
+        for key in required_keys:
+            value = data.get(key)
+            normalized[key] = value if isinstance(value, str) else ""
+
+        return normalized

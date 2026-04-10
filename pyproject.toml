@@ -5,6 +5,8 @@ description = "JavaScript Code Clone Detection using SAGA"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
 ]
 

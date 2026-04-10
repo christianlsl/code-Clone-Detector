@@ -318,7 +318,7 @@ class ResultParser:
                     if not left_entry or not right_entry:
                         continue
                     similarities.append({
-                        "index_pair": [
+                        "func_pair": [
                             self._build_func_identifier(left_entry),
                             self._build_func_identifier(right_entry),
                         ],

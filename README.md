@@ -9,6 +9,7 @@
 - 调用 SAGA 执行克隆检测
 - 每次运行前自动清理 `thirdparty/saga/result`、`thirdparty/saga/tokenData` 和 `thirdparty/saga/logs`
 - 将 SAGA 结果解析为结构化 JSON
+- 使用 `llm_client` 对相似函数簇生成结构化 JSON 总结
 - 支持同一文件中的多个函数克隆结果
 
 ## 目录结构
@@ -68,14 +69,23 @@ testcases/
 - Python 3.12+
 - JDK 1.8 or higher 
 - `pyyaml`
+- `openai`
+- `python-dotenv`
 
 ### 安装 Python 依赖
 
 ```bash
-pip install pyyaml
+uv add pyyaml openai python-dotenv
 ```
 
-如果使用虚拟环境，建议先激活后再安装依赖。
+### LLM 环境变量
+
+使用函数簇总结功能前，需要在环境中配置以下变量：
+
+- `LLM_MODEL_ID`
+- `LLM_API_KEY`
+- `LLM_BASE_URL`
+- `LLM_TIMEOUT`（可选，默认 60 秒）
 
 ## 运行方式
 
@@ -135,7 +145,8 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
    - `type123_method_group_result.csv`
    - `MeasureIndex.csv`
    - `type123_method_pair_result.csv`
-5. 生成 JSON 文件并写入输出目录
+5. 使用 `llm_client` 对每个 `func_group` 生成 JSON 格式总结
+6. 生成 JSON 文件并写入输出目录
 
 ## 输出结果格式
 
@@ -167,7 +178,13 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
         ],
         "similarity": 0.9354839
       }
-    ]
+    ],
+    "summary": {
+      "共同职责": "这组函数整体负责处理相似的数据转换或解析流程。",
+      "共同功能": "它们都围绕输入读取、规则判断和结果构造展开，核心控制结构相近。",
+      "主要差异点": "差异主要体现在输入字段、边界条件判断以及输出结果细节上。",
+      "可能的复用方向": "可抽取公共处理流程，并将差异逻辑参数化或封装为可配置策略。"
+    }
   }
 ]
 ```
@@ -181,6 +198,11 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
 - `relevent_projects`：克隆组涉及的项目名列表。
 - `pair_similarity`：该组内函数两两之间的相似度信息。
 - `index_pair`：使用 `file_path_startLine_endLine` 组成的稳定标识，便于直接定位具体函数。
+- `summary`：由 `llm_client` 基于 `func_group` 生成的结构化总结对象；若 LLM 不可用或返回值无法解析为合法 JSON，则为 `null`。
+- `共同职责`：这组相似函数在更高层面的共同职责描述。
+- `共同功能`：这组函数在实现层面的共同行为或处理流程。
+- `主要差异点`：这组函数在输入、分支、边界条件或输出上的核心差异。
+- `可能的复用方向`：适合抽象、封装或参数化复用的方向。
 
 ## 项目模块
 
@@ -217,4 +239,4 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
 python3 main.py -i ./testcases -o ./output/clone_detection_result.json
 ```
 
-运行后会在输出目录生成 JSON 结果，并在日志目录写入运行日志。
+运行后会在输出目录生成 JSON 结果，并在日志目录写入运行日志。若已正确配置 LLM 环境变量，输出中的 `summary` 字段会包含结构化 JSON 总结。
