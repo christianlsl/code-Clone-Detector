@@ -8,9 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
 dataset/
 models/
 logs/
 output/
 .DS_Store
+.codex
+
+result/
+tokenData/
