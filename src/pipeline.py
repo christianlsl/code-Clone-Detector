@@ -119,7 +119,7 @@ class CloneDetectionPipeline:
             logger.warning(f"Failed to parse LLM summary as JSON: {e}")
             return None
 
-        required_keys = ["共同职责", "共同功能", "主要差异点", "可能的复用方向"]
+        required_keys = ["函数组名称","共同职责", "共同功能", "主要差异点", "可能的复用方向"]
         if not isinstance(data, dict):
             logger.warning("LLM summary is not a JSON object")
             return None

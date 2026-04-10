@@ -36,9 +36,9 @@ class LLMClient:
             collected_content = []
             for chunk in response:
                 content = chunk.choices[0].delta.content or ""
-                print(content, end="", flush=True)
+                # print(content, end="", flush=True)
                 collected_content.append(content)
-            print()  # 在流式输出结束后换行
+            # print()  # 在流式输出结束后换行
             return "".join(collected_content)
 
         except Exception as e:
@@ -64,8 +64,8 @@ class LLMClient:
                 "content": (
                     "你是资深代码分析助手。"
                     "请基于给定的一组相似函数，输出简洁、准确的中文 JSON 总结。"
-                    "输出必须是一个合法 JSON 对象，且只能包含以下 4 个字段："
-                    "\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
+                    "输出必须是一个合法 JSON 对象，且只能包含以下 5 个字段："
+                    "\"函数组名称\"、\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
                     "每个字段的值都是Markdown字符串。"
                     "不要输出代码块，不要添加 JSON 之外的任何解释。"
                     "不要编造未提供的信息。"
@@ -86,7 +86,7 @@ class LLMClient:
             (
                 f"以下是一个包含 {len(func_group)} 个 javascript 相似函数的克隆簇。"
                 "请严格输出一个 JSON 对象，字段固定为："
-                "\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
+                "\"函数组名称\"、\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
             )
         ]
 
