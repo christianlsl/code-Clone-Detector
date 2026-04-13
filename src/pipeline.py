@@ -29,12 +29,17 @@ class CloneDetectionPipeline:
         self.saga_runner = SAGARunner(saga_dir)
         self.logger = logging.getLogger(__name__)
     
-    def run(self, output_file: Optional[Path] = None) -> bool:
+    def run(
+        self,
+        output_file: Optional[Path] = None,
+        summarize: bool = True
+    ) -> bool:
         """
         Execute the complete clone detection pipeline.
 
         Args:
             output_file: Optional output file path (defaults to config.output_path)
+            summarize: Whether to generate LLM summaries
 
         Returns:
             True if successful, False otherwise
@@ -67,8 +72,11 @@ class CloneDetectionPipeline:
             logger.info(f"Found {len(results)} clone groups")
 
             # Step 4: Summarize clone groups with LLM
-            logger.info("Step 3: Summarizing clone groups with LLM...")
-            self._summarize_results(results)
+            if summarize:
+                logger.info("Step 3: Summarizing clone groups with LLM...")
+                self._summarize_results(results)
+            else:
+                logger.info("Step 3: Skipping LLM summary generation")
             
             # Step 5: Save results
             logger.info("Step 4: Saving results...")

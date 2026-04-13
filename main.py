@@ -16,11 +16,6 @@ def main():
         description="JavaScript Code Clone Detection using SAGA"
     )
     parser.add_argument(
-        "-c", "--config",
-        default="config.yaml",
-        help="Path to configuration file (default: config.yaml)"
-    )
-    parser.add_argument(
         "-i", "--input",
         help="Input data path (optional, overrides config)"
     )
@@ -29,31 +24,30 @@ def main():
         help="Output file path (optional, overrides config)"
     )
     parser.add_argument(
-        "-l", "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)"
+        "--no-summary",
+        action="store_true",
+        help="Skip LLM summary generation"
     )
     
     args = parser.parse_args()
     
     try:
         # Load configuration
-        config = Config(args.config)
+        config = Config()
 
         # Override config data_path when input argument is provided
         if args.input:
             config.config["data_path"] = args.input
         
         # Setup logging
-        log_level = getattr(logging, args.log_level)
+        log_level = logging.INFO
         root_logger = setup_logger("clone_detector", config.log_path, log_level)
         
         # Configure root logger to propagate to our logger
         logging.getLogger().setLevel(log_level)
         
         logger = logging.getLogger("clone_detector")
-        logger.info(f"Configuration loaded from {args.config}")
+        logger.info(f"Configuration loaded from {config.config_file}")
         logger.info(f"Data path: {config.data_path}")
         logger.info(f"Output path: {config.output_path}")
         logger.info(f"Log path: {config.log_path}")
@@ -62,7 +56,7 @@ def main():
         pipeline = CloneDetectionPipeline(config)
         output_file = Path(args.output) if args.output else None
         
-        success = pipeline.run(output_file)
+        success = pipeline.run(output_file, summarize=not args.no_summary)
         
         logger.info(f"Execution {'completed successfully' if success else 'failed'}")
         
