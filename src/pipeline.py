@@ -191,21 +191,52 @@ class CloneDetectionPipeline:
             logger.warning(f"LLM client unavailable, skip func_group summary: {e}")
             return
 
+        unprocessed_results: list[dict[str, Any]] = []
+
         for index, result in enumerate(results, start=1):
             type1_groups = result.get("type1_group", [])
+            raw_result: dict[str, Any] = {
+                "func_group": result.get("func_group", []),
+                "type1_group_outputs": [],
+                "group_comparison_output": None,
+            }
+
             if not type1_groups:
                 result["summary"] = None
+                unprocessed_results.append(raw_result)
                 continue
 
             logger.info(f"Summarizing Type-1 groups for clone group {index}/{len(results)}")
             for type1_group in type1_groups:
                 summary = llm_client.summarize_type1_group(type1_group.get("functions", []))
+                raw_result["type1_group_outputs"].append(
+                    {
+                        "functions": type1_group.get("functions", []),
+                        "llm_output": summary,
+                    }
+                )
                 parsed = self._parse_type1_group_summary(summary)
                 if parsed:
                     type1_group.update(parsed)
 
             comparison = llm_client.compare_type1_groups(type1_groups)
+            raw_result["group_comparison_output"] = comparison
             result["summary"] = self._parse_group_comparison_json(comparison)
+            unprocessed_results.append(raw_result)
+
+        self._save_unprocessed_llm_results(unprocessed_results)
+
+    def _save_unprocessed_llm_results(self, raw_results: list[dict[str, Any]]) -> None:
+        """Save raw LLM outputs before parsing."""
+        output_file = self.config.output_path / "clone_detection_unprocess_result.json"
+
+        try:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            with output_file.open("w", encoding="utf-8") as file:
+                json.dump(raw_results, file, ensure_ascii=False, indent=2)
+            logger.info(f"Saved unprocessed LLM outputs to {output_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save unprocessed LLM outputs: {e}")
 
     def _parse_json_response(self, summary: Optional[str]) -> Optional[dict[str, Any]]:
         """Parse a JSON object from an LLM response."""
