@@ -14,13 +14,13 @@
 
 
 var VALID_CLASS = 'ng-valid',
-    INVALID_CLASS = 'ng-invalid',
-    PRISTINE_CLASS = 'ng-pristine',
-    DIRTY_CLASS = 'ng-dirty',
-    UNTOUCHED_CLASS = 'ng-untouched',
-    TOUCHED_CLASS = 'ng-touched',
-    EMPTY_CLASS = 'ng-empty',
-    NOT_EMPTY_CLASS = 'ng-not-empty';
+  INVALID_CLASS = 'ng-invalid',
+  PRISTINE_CLASS = 'ng-pristine',
+  DIRTY_CLASS = 'ng-dirty',
+  UNTOUCHED_CLASS = 'ng-untouched',
+  TOUCHED_CLASS = 'ng-touched',
+  EMPTY_CLASS = 'ng-empty',
+  NOT_EMPTY_CLASS = 'ng-not-empty';
 
 var ngModelMinErr = minErr('ngModel');
 
@@ -301,28 +301,28 @@ function NgModelController($scope, $exceptionHandler, $attr, $element, $parse, $
 }
 
 NgModelController.prototype = {
-  $$initGetterSetters: function() {
+  $$initGetterSetters: function () {
     if (this.$options.getOption('getterSetter')) {
       var invokeModelGetter = this.$$parse(this.$$attr.ngModel + '()'),
-          invokeModelSetter = this.$$parse(this.$$attr.ngModel + '($$$p)');
+        invokeModelSetter = this.$$parse(this.$$attr.ngModel + '($$$p)');
 
-      this.$$ngModelGet = function($scope) {
+      this.$$ngModelGet = function ($scope) {
         var modelValue = this.$$parsedNgModel($scope);
         if (isFunction(modelValue)) {
           modelValue = invokeModelGetter($scope);
         }
         return modelValue;
       };
-      this.$$ngModelSet = function($scope, newValue) {
+      this.$$ngModelSet = function ($scope, newValue) {
         if (isFunction(this.$$parsedNgModel($scope))) {
-          invokeModelSetter($scope, {$$$p: newValue});
+          invokeModelSetter($scope, { $$$p: newValue });
         } else {
           this.$$parsedNgModelAssign($scope, newValue);
         }
       };
     } else if (!this.$$parsedNgModel.assign) {
       throw ngModelMinErr('nonassign', 'Expression \'{0}\' is non-assignable. Element: {1}',
-          this.$$attr.ngModel, startingTag(this.$$element));
+        this.$$attr.ngModel, startingTag(this.$$element));
     }
   },
 
@@ -367,12 +367,12 @@ NgModelController.prototype = {
    * @param {*} value The value of the input to check for emptiness.
    * @returns {boolean} True if `value` is "empty".
    */
-  $isEmpty: function(value) {
+  $isEmpty: function (value) {
     // eslint-disable-next-line no-self-compare
     return isUndefined(value) || value === '' || value === null || value !== value;
   },
 
-  $$updateEmptyClasses: function(value) {
+  $$updateEmptyClasses: function (value) {
     if (this.$isEmpty(value)) {
       this.$$animate.removeClass(this.$$element, NOT_EMPTY_CLASS);
       this.$$animate.addClass(this.$$element, EMPTY_CLASS);
@@ -393,7 +393,7 @@ NgModelController.prototype = {
    * state (`ng-pristine` class). A model is considered to be pristine when the control
    * has not been changed from when first compiled.
    */
-  $setPristine: function() {
+  $setPristine: function () {
     this.$dirty = false;
     this.$pristine = true;
     this.$$animate.removeClass(this.$$element, DIRTY_CLASS);
@@ -411,7 +411,7 @@ NgModelController.prototype = {
    * state (`ng-dirty` class). A model is considered to be dirty when the control has been changed
    * from when first compiled.
    */
-  $setDirty: function() {
+  $setDirty: function () {
     this.$dirty = true;
     this.$pristine = false;
     this.$$animate.removeClass(this.$$element, PRISTINE_CLASS);
@@ -431,7 +431,7 @@ NgModelController.prototype = {
    * by default, however this function can be used to restore that state if the model has
    * already been touched by the user.
    */
-  $setUntouched: function() {
+  $setUntouched: function () {
     this.$touched = false;
     this.$untouched = true;
     this.$$animate.setClass(this.$$element, UNTOUCHED_CLASS, TOUCHED_CLASS);
@@ -448,7 +448,7 @@ NgModelController.prototype = {
    * touched state (`ng-touched` class). A model is considered to be touched when the user has
    * first focused the control element and then shifted focus away from the control (blur event).
    */
-  $setTouched: function() {
+  $setTouched: function () {
     this.$touched = true;
     this.$untouched = false;
     this.$$animate.setClass(this.$$element, TOUCHED_CLASS, UNTOUCHED_CLASS);
@@ -543,7 +543,7 @@ NgModelController.prototype = {
         </file>
    * </example>
    */
-  $rollbackViewValue: function() {
+  $rollbackViewValue: function () {
     this.$$timeout.cancel(this.$$pendingDebounce);
     this.$viewValue = this.$$lastCommittedViewValue;
     this.$render();
@@ -561,7 +561,7 @@ NgModelController.prototype = {
    * If the validity changes to valid, it will set the model to the last available valid
    * `$modelValue`, i.e. either the last parsed value or the last value set from the scope.
    */
-  $validate: function() {
+  $validate: function () {
 
     // ignore $validate before model is initialized
     if (isNumberNaN(this.$modelValue)) {
@@ -581,7 +581,7 @@ NgModelController.prototype = {
     var allowInvalid = this.$options.getOption('allowInvalid');
 
     var that = this;
-    this.$$runValidators(modelValue, viewValue, function(allValid) {
+    this.$$runValidators(modelValue, viewValue, function (allValid) {
       // If there was no change in validity, don't update the model
       // This prevents changing an invalid modelValue to undefined
       if (!allowInvalid && prevValid !== allValid) {
@@ -598,7 +598,7 @@ NgModelController.prototype = {
     });
   },
 
-  $$runValidators: function(modelValue, viewValue, doneCallback) {
+  $$runValidators: function (modelValue, viewValue, doneCallback) {
     this.$$currentValidationRunId++;
     var localValidationRunId = this.$$currentValidationRunId;
     var that = this;
@@ -621,10 +621,10 @@ NgModelController.prototype = {
         setValidity(errorKey, null);
       } else {
         if (!that.$$parserValid) {
-          forEach(that.$validators, function(v, name) {
+          forEach(that.$validators, function (v, name) {
             setValidity(name, null);
           });
-          forEach(that.$asyncValidators, function(v, name) {
+          forEach(that.$asyncValidators, function (v, name) {
             setValidity(name, null);
           });
         }
@@ -638,13 +638,13 @@ NgModelController.prototype = {
 
     function processSyncValidators() {
       var syncValidatorsValid = true;
-      forEach(that.$validators, function(validator, name) {
+      forEach(that.$validators, function (validator, name) {
         var result = Boolean(validator(modelValue, viewValue));
         syncValidatorsValid = syncValidatorsValid && result;
         setValidity(name, result);
       });
       if (!syncValidatorsValid) {
-        forEach(that.$asyncValidators, function(v, name) {
+        forEach(that.$asyncValidators, function (v, name) {
           setValidity(name, null);
         });
         return false;
@@ -655,16 +655,16 @@ NgModelController.prototype = {
     function processAsyncValidators() {
       var validatorPromises = [];
       var allValid = true;
-      forEach(that.$asyncValidators, function(validator, name) {
+      forEach(that.$asyncValidators, function (validator, name) {
         var promise = validator(modelValue, viewValue);
         if (!isPromiseLike(promise)) {
           throw ngModelMinErr('nopromise',
             'Expected asynchronous validator to return a promise but got \'{0}\' instead.', promise);
         }
         setValidity(name, undefined);
-        validatorPromises.push(promise.then(function() {
+        validatorPromises.push(promise.then(function () {
           setValidity(name, true);
-        }, function() {
+        }, function () {
           allValid = false;
           setValidity(name, false);
         }));
@@ -672,7 +672,7 @@ NgModelController.prototype = {
       if (!validatorPromises.length) {
         validationDone(true);
       } else {
-        that.$$q.all(validatorPromises).then(function() {
+        that.$$q.all(validatorPromises).then(function () {
           validationDone(allValid);
         }, noop);
       }
@@ -703,7 +703,7 @@ NgModelController.prototype = {
    * event defined in `ng-model-options`. this method is rarely needed as `NgModelController`
    * usually handles calling this in response to input events.
    */
-  $commitViewValue: function() {
+  $commitViewValue: function () {
     var viewValue = this.$viewValue;
 
     this.$$timeout.cancel(this.$$pendingDebounce);
@@ -724,7 +724,7 @@ NgModelController.prototype = {
     this.$$parseAndValidate();
   },
 
-  $$parseAndValidate: function() {
+  $$parseAndValidate: function () {
     var viewValue = this.$$lastCommittedViewValue;
     var modelValue = viewValue;
     var that = this;
@@ -759,7 +759,7 @@ NgModelController.prototype = {
 
     // Pass the $$lastCommittedViewValue here, because the cached viewValue might be out of date.
     // This can happen if e.g. $setViewValue is called from inside a parser
-    this.$$runValidators(modelValue, this.$$lastCommittedViewValue, function(allValid) {
+    this.$$runValidators(modelValue, this.$$lastCommittedViewValue, function (allValid) {
       if (!allowInvalid) {
         // Note: Don't check this.$valid here, as we could have
         // external validators (e.g. calculated on the server),
@@ -777,9 +777,9 @@ NgModelController.prototype = {
     }
   },
 
-  $$writeModelToScope: function() {
+  $$writeModelToScope: function () {
     this.$$ngModelSet(this.$$scope, this.$modelValue);
-    forEach(this.$viewChangeListeners, function(listener) {
+    forEach(this.$viewChangeListeners, function (listener) {
       try {
         listener();
       } catch (e) {
@@ -840,14 +840,14 @@ NgModelController.prototype = {
    * @param {*} value value from the view.
    * @param {string} trigger Event that triggered the update.
    */
-  $setViewValue: function(value, trigger) {
+  $setViewValue: function (value, trigger) {
     this.$viewValue = value;
     if (this.$options.getOption('updateOnDefault')) {
       this.$$debounceViewValueCommit(trigger);
     }
   },
 
-  $$debounceViewValueCommit: function(trigger) {
+  $$debounceViewValueCommit: function (trigger) {
     var debounceDelay = this.$options.getOption('debounce');
 
     if (isNumber(debounceDelay[trigger])) {
@@ -863,13 +863,13 @@ NgModelController.prototype = {
     this.$$timeout.cancel(this.$$pendingDebounce);
     var that = this;
     if (debounceDelay > 0) { // this fails if debounceDelay is an object
-      this.$$pendingDebounce = this.$$timeout(function() {
+      this.$$pendingDebounce = this.$$timeout(function () {
         that.$commitViewValue();
       }, debounceDelay);
     } else if (this.$$rootScope.$$phase) {
       this.$commitViewValue();
     } else {
-      this.$$scope.$apply(function() {
+      this.$$scope.$apply(function () {
         that.$commitViewValue();
       });
     }
@@ -904,7 +904,7 @@ NgModelController.prototype = {
    * @param {Object} options a hash of settings to override the previous options
    *
    */
-  $overrideModelOptions: function(options) {
+  $overrideModelOptions: function (options) {
     this.$options = this.$options.createChild(options);
     this.$$setUpdateOnEvents();
   },
@@ -1020,7 +1020,7 @@ NgModelController.prototype = {
    * </example>
    *
    */
-  $processModelValue: function() {
+  $processModelValue: function () {
     var viewValue = this.$$format();
 
     if (this.$viewValue !== viewValue) {
@@ -1035,9 +1035,9 @@ NgModelController.prototype = {
   /**
    * This method is called internally to run the $formatters on the $modelValue
    */
-  $$format: function() {
+  $$format: function () {
     var formatters = this.$formatters,
-        idx = formatters.length;
+      idx = formatters.length;
 
     var viewValue = this.$modelValue;
     while (idx--) {
@@ -1050,13 +1050,13 @@ NgModelController.prototype = {
   /**
    * This method is called internally when the bound scope value changes.
    */
-  $$setModelValue: function(modelValue) {
+  $$setModelValue: function (modelValue) {
     this.$modelValue = this.$$rawModelValue = modelValue;
     this.$$parserValid = undefined;
     this.$processModelValue();
   },
 
-  $$setUpdateOnEvents: function() {
+  $$setUpdateOnEvents: function () {
     if (this.$$updateEvents) {
       this.$$element.off(this.$$updateEvents, this.$$updateEventHandler);
     }
@@ -1067,7 +1067,7 @@ NgModelController.prototype = {
     }
   },
 
-  $$updateEventHandler: function(ev) {
+  $$updateEventHandler: function (ev) {
     this.$$debounceViewValueCommit(ev && ev.type);
   }
 };
@@ -1098,7 +1098,20 @@ function setupModelWatcher(ctrl) {
     return modelValue;
   });
 }
+function setupModelWatcher(ctrl) {
+  ctrl.$$scope.$watch(function ngModelWatch(scope) {
+    var modelValue = ctrl.$$ngModelGet(scope);
+    if (modelValue !== ctrl.$modelValue &&
+      // checks for NaN is needed to allow setting the model to NaN when there's an asyncValidator
+      // eslint-disable-next-line no-self-compare
+      (ctrl.$modelValue === ctrl.$modelValue || modelValue === modelValue)
+    ) {
+      ctrl.$$setModelValue(modelValue);
+    }
 
+    return modelValue;
+  });
+}
 /**
  * @ngdoc method
  * @name ngModel.NgModelController#$setValidity
@@ -1123,10 +1136,10 @@ function setupModelWatcher(ctrl) {
  */
 addSetValidityMethod({
   clazz: NgModelController,
-  set: function(object, property) {
+  set: function (object, property) {
     object[property] = true;
   },
-  unset: function(object, property) {
+  unset: function (object, property) {
     delete object[property];
   }
 });
@@ -1320,7 +1333,7 @@ addSetValidityMethod({
      </file>
  * </example>
  */
-var ngModelDirective = ['$rootScope', function($rootScope) {
+var ngModelDirective = ['$rootScope', function ($rootScope) {
   return {
     restrict: 'A',
     require: ['ngModel', '^?form', '^?ngModelOptions'],
@@ -1336,8 +1349,8 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
       return {
         pre: function ngModelPreLink(scope, element, attr, ctrls) {
           var modelCtrl = ctrls[0],
-              formCtrl = ctrls[1] || modelCtrl.$$parentForm,
-              optionsCtrl = ctrls[2];
+            formCtrl = ctrls[1] || modelCtrl.$$parentForm,
+            optionsCtrl = ctrls[2];
 
           if (optionsCtrl) {
             modelCtrl.$options = optionsCtrl.$options;
@@ -1348,13 +1361,13 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
           // notify others, especially parent forms
           formCtrl.$addControl(modelCtrl);
 
-          attr.$observe('name', function(newValue) {
+          attr.$observe('name', function (newValue) {
             if (modelCtrl.$name !== newValue) {
               modelCtrl.$$parentForm.$$renameControl(modelCtrl, newValue);
             }
           });
 
-          scope.$on('$destroy', function() {
+          scope.$on('$destroy', function () {
             modelCtrl.$$parentForm.$removeControl(modelCtrl);
           });
         },
@@ -1366,7 +1379,7 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
             modelCtrl.$setTouched();
           }
 
-          element.on('blur', function() {
+          element.on('blur', function () {
             if (modelCtrl.$touched) return;
 
             if ($rootScope.$$phase) {

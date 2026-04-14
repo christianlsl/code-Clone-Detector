@@ -3,9 +3,9 @@
 import csv
 import json
 import re
+import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Set
-import logging
 
 
 logger = logging.getLogger(__name__)
@@ -27,15 +27,13 @@ class ResultParser:
         
         self.group_file = self.result_dir / "type123_method_group_result.csv"
         self.measure_file = self.result_dir / "MeasureIndex.csv"
-        self.pair_file = self.result_dir / "type123_method_pair_result.csv"
         
         # Validate files exist
-        for file_path in [self.group_file, self.measure_file, self.pair_file]:
+        for file_path in [self.group_file, self.measure_file]:
             if not file_path.exists():
                 raise FileNotFoundError(f"Result file not found: {file_path}")
         
         self.measure_index: Dict[int, Tuple[str, int, int]] = {}
-        self.pair_similarity: Dict[Tuple[int, int], float] = {}
     
     def parse(self) -> List[Dict[str, Any]]:
         """
@@ -46,10 +44,7 @@ class ResultParser:
         """
         # Load measure index
         self._load_measure_index()
-        
-        # Load pair similarities
-        self._load_pair_similarities()
-        
+
         # Load and process clone groups
         group_indices_list = self._load_clone_groups()
         
@@ -79,25 +74,6 @@ class ResultParser:
             logger.info(f"Loaded {len(self.measure_index)} measure entries")
         except Exception as e:
             logger.error(f"Failed to load measure index: {e}")
-            raise
-    
-    def _load_pair_similarities(self) -> None:
-        """Load type123_method_pair_result.csv file."""
-        try:
-            with open(self.pair_file, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    if len(row) >= 3:
-                        idx1 = int(row[0])
-                        idx2 = int(row[1])
-                        similarity = float(row[2])
-                        # Store both directions
-                        self.pair_similarity[(idx1, idx2)] = similarity
-                        self.pair_similarity[(idx2, idx1)] = similarity
-            
-            logger.info(f"Loaded {len(self.pair_similarity)} pair similarities")
-        except Exception as e:
-            logger.error(f"Failed to load pair similarities: {e}")
             raise
     
     def _load_clone_groups(self) -> List[List[int]]:
@@ -133,7 +109,6 @@ class ResultParser:
             Clone group in output format
         """
         func_group: List[Dict[str, Any]] = []
-        func_index_map: Dict[int, Dict[str, Any]] = {}
         projects: Set[str] = set()
         
         for idx in indices:
@@ -154,7 +129,6 @@ class ResultParser:
                     "code": code,
                 }
                 func_group.append(func_entry)
-                func_index_map[idx] = func_entry
                 
                 # Extract project name
                 project = self._extract_project_name(normalized_path)
@@ -163,14 +137,12 @@ class ResultParser:
         
         if not func_group:
             return None
-        
-        # Build pair similarities
-        pair_similarities = self._build_pair_similarities(indices, func_index_map)
-        
+
         return {
             "func_group": func_group,
             "relevent_projects": sorted(list(projects)),
-            "pair_similarity": pair_similarities
+            "type1_group": [],
+            "summary": None,
         }
 
     def _extract_code(self, file_path: str, start_line: int, end_line: int) -> str:
@@ -282,54 +254,6 @@ class ResultParser:
                 return match.group(2)
             return parts[0]
         return ""
-    
-    def _build_pair_similarities(
-        self,
-        indices: List[int],
-        func_index_map: Dict[int, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Build pair similarity information.
-
-        Args:
-            indices: List of measure indices in this group
-
-        Returns:
-            List of pair similarity objects
-        """
-        similarities = []
-        seen_pairs = set()
-        
-        for i, idx1 in enumerate(indices):
-            for idx2 in indices[i+1:]:
-                pair_key = (min(idx1, idx2), max(idx1, idx2))
-                if pair_key in seen_pairs:
-                    continue
-                seen_pairs.add(pair_key)
-                
-                similarity_score = self.pair_similarity.get(
-                    pair_key,
-                    self.pair_similarity.get((idx2, idx1), None)
-                )
-                
-                if similarity_score is not None:
-                    left_entry = func_index_map.get(idx1)
-                    right_entry = func_index_map.get(idx2)
-                    if not left_entry or not right_entry:
-                        continue
-                    similarities.append({
-                        "func_pair": [
-                            self._build_func_identifier(left_entry),
-                            self._build_func_identifier(right_entry),
-                        ],
-                        "similarity": similarity_score
-                    })
-        
-        return similarities
-
-    def _build_func_identifier(self, func_entry: Dict[str, Any]) -> str:
-        """Build a stable identifier for a function entry."""
-        return f"{func_entry['file_path']}_{func_entry['start_line']}_{func_entry['end_line']}"
     
     def save_results(self, results: List[Dict[str, Any]], output_file: Path) -> None:
         """

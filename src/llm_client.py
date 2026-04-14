@@ -1,7 +1,8 @@
 import os
-from openai import OpenAI
-from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
+
+from dotenv import load_dotenv
+from openai import OpenAI
 
 # 加载 .env 文件中的环境变量
 load_dotenv()
@@ -45,17 +46,9 @@ class LLMClient:
             print(f"❌ 调用LLM API时发生错误: {e}")
             return None
 
-    def summarize_func_group(self, func_group: List[Dict[str, Any]]) -> Optional[str]:
-        """
-        对相似函数簇生成 JSON 格式总结。
-
-        Args:
-            func_group: 结果中的 func_group 字段
-
-        Returns:
-            JSON 字符串，失败时返回 None
-        """
-        if not func_group:
+    def summarize_type1_group(self, functions: List[Dict[str, Any]]) -> Optional[str]:
+        """总结一个 Type-1 函数组的名称和功能。"""
+        if not functions:
             return None
 
         messages = [
@@ -63,9 +56,34 @@ class LLMClient:
                 "role": "system",
                 "content": (
                     "你是资深代码分析助手。"
-                    "请基于给定的一组相似函数，输出简洁、准确的中文 JSON 总结。"
-                    "输出必须是一个合法 JSON 对象，且只能包含以下 5 个字段："
-                    "\"函数组名称\"、\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
+                    "请基于给定的一组 Type-1 克隆函数，输出简洁、准确的中文 JSON 总结。"
+                    "输出必须是一个合法 JSON 对象，且只能包含以下 2 个字段："
+                    "\"group_name\"、\"functionality\"。"
+                    "每个字段的值都是字符串。"
+                    "不要输出代码块，不要添加 JSON 之外的任何解释。"
+                    "不要编造未提供的信息。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": self._build_type1_group_prompt(functions),
+            },
+        ]
+        return self.think(messages)
+
+    def compare_type1_groups(self, type1_groups: List[Dict[str, Any]]) -> Optional[str]:
+        """比较同一 func_group 中多个 Type-1 组之间的差异。"""
+        if not type1_groups:
+            return None
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是资深代码分析助手。"
+                    "请基于同一个克隆组中的多个 Type-1 函数组，输出简洁、准确的中文 JSON 总结。"
+                    "输出必须是一个合法 JSON 对象，且只能包含以下 4 个字段："
+                    "\"克隆组名称\"、\"总体功能\"、\"Type1组差异\"、\"可能的复用方向\"。"
                     "每个字段的值都是Markdown字符串。"
                     "不要输出代码块，不要添加 JSON 之外的任何解释。"
                     "不要编造未提供的信息。"
@@ -73,24 +91,25 @@ class LLMClient:
             },
             {
                 "role": "user",
-                "content": self._build_func_group_prompt(func_group),
+                "content": self._build_type1_comparison_prompt(type1_groups),
             },
         ]
         return self.think(messages)
 
-    def _build_func_group_prompt(self, func_group: List[Dict[str, Any]]) -> str:
-        """构造函数簇总结提示词，限制上下文大小。"""
-        max_functions = 8
+    def _build_type1_group_prompt(self, functions: List[Dict[str, Any]]) -> str:
+        """构造 Type-1 函数组总结提示词。"""
+        max_functions = 6
         max_code_chars = 1200
         prompt_parts = [
             (
-                f"以下是一个包含 {len(func_group)} 个 javascript 相似函数的克隆簇。"
+                f"以下是一个包含 {len(functions)} 个 Type-1 克隆函数的函数组。"
+                "这些函数除空白字符和布局外完全一致。"
                 "请严格输出一个 JSON 对象，字段固定为："
-                "\"函数组名称\"、\"共同职责\"、\"共同功能\"、\"主要差异点\"、\"可能的复用方向\"。"
+                "\"group_name\"、\"functionality\"。"
             )
         ]
 
-        for idx, func in enumerate(func_group[:max_functions], start=1):
+        for idx, func in enumerate(functions[:max_functions], start=1):
             code = (func.get("code") or "").strip()
             if len(code) > max_code_chars:
                 code = code[:max_code_chars] + "\n... [truncated]"
@@ -99,16 +118,53 @@ class LLMClient:
                 "\n".join([
                     f"函数 {idx}:",
                     f"file_path: {func.get('file_path', '')}",
-                    # f"start_line: {func.get('start_line', '')}",
-                    # f"end_line: {func.get('end_line', '')}",
                     "code:",
                     code or "[empty]",
                 ])
             )
 
-        if len(func_group) > max_functions:
+        if len(functions) > max_functions:
             prompt_parts.append(
-                f"\n其余 {len(func_group) - max_functions} 个函数未展开，请结合已提供样本进行簇级别总结。"
+                f"\n其余 {len(functions) - max_functions} 个函数未展开，请根据样本总结该 Type-1 组。"
+            )
+
+        return "\n\n".join(prompt_parts)
+
+    def _build_type1_comparison_prompt(self, type1_groups: List[Dict[str, Any]]) -> str:
+        """构造 Type-1 函数组间比较提示词。"""
+        max_groups = 8
+        max_code_chars = 1000
+        prompt_parts = [
+            (
+                f"以下是同一个 func_group 中的 {len(type1_groups)} 个 Type-1 函数组。"
+                "请比较这些 Type-1 组之间的功能差异。"
+                "请严格输出一个 JSON 对象，字段固定为："
+                "\"克隆组名称\"、\"总体功能\"、\"Type1组差异\"、\"可能的复用方向\"。"
+            )
+        ]
+
+        for idx, group in enumerate(type1_groups[:max_groups], start=1):
+            functions = group.get("functions", [])
+            sample_code = ""
+            if functions:
+                sample_code = (functions[0].get("code") or "").strip()
+            if len(sample_code) > max_code_chars:
+                sample_code = sample_code[:max_code_chars] + "\n... [truncated]"
+
+            prompt_parts.append(
+                "\n".join([
+                    f"Type1组 {idx}:",
+                    f"group_name: {group.get('group_name', '')}",
+                    f"functionality: {group.get('functionality', '')}",
+                    f"function_count: {len(functions)}",
+                    "sample_code:",
+                    sample_code or "[empty]",
+                ])
+            )
+
+        if len(type1_groups) > max_groups:
+            prompt_parts.append(
+                f"\n其余 {len(type1_groups) - max_groups} 个 Type-1 组未展开，请基于已提供信息完成组间比较。"
             )
 
         return "\n\n".join(prompt_parts)

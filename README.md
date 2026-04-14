@@ -144,9 +144,13 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
 4. 解析 SAGA 输出文件：
    - `type123_method_group_result.csv`
    - `MeasureIndex.csv`
-   - `type123_method_pair_result.csv`
-5. 使用 `llm_client` 对每个 `func_group` 生成 JSON 格式总结
-6. 生成 JSON 文件并写入输出目录
+5. 按 `func_group` 中函数源码做 Type-1 分组：
+   - 忽略空白字符和布局差异
+   - 归并出多个 `type1_group`
+6. 使用 `llm_client`：
+   - 总结每个 `type1_group` 的名称和功能
+   - 比较同一 `func_group` 中各个 `type1_group` 的差异
+7. 生成 JSON 文件并写入输出目录
 
 ## 输出结果格式
 
@@ -170,19 +174,36 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
       }
     ],
     "relevent_projects": ["datahub", "sdm_df"],
-    "pair_similarity": [
+    "type1_group": [
       {
-        "index_pair": [
-          "01.datahub/modules/split/ngModel.js_120_160",
-          "02.sdm_df/messageFormatParser.js_80_110"
-        ],
-        "similarity": 0.9354839
+        "group_name": "表单状态重置函数组",
+        "functionality": "负责重置表单元素状态并同步相关 CSS 类。",
+        "functions": [
+          {
+            "file_path": "01.datahub/modules/split/ngModel.js",
+            "start_line": 120,
+            "end_line": 160,
+            "code": "function foo() { ... }"
+          }
+        ]
+      },
+      {
+        "group_name": "表单状态置脏函数组",
+        "functionality": "负责将表单元素标记为已修改，并通知父表单。",
+        "functions": [
+          {
+            "file_path": "02.sdm_df/messageFormatParser.js",
+            "start_line": 80,
+            "end_line": 110,
+            "code": "function bar() { ... }"
+          }
+        ]
       }
     ],
     "summary": {
-      "共同职责": "这组函数整体负责处理相似的数据转换或解析流程。",
-      "共同功能": "它们都围绕输入读取、规则判断和结果构造展开，核心控制结构相近。",
-      "主要差异点": "差异主要体现在输入字段、边界条件判断以及输出结果细节上。",
+      "克隆组名称": "表单状态切换函数组",
+      "总体功能": "这些 Type-1 组共同负责维护表单控件的状态与界面表现。",
+      "Type1组差异": "一个 Type-1 组负责重置状态，另一个负责设置脏状态并向父表单传播。",
       "可能的复用方向": "可抽取公共处理流程，并将差异逻辑参数化或封装为可配置策略。"
     }
   }
@@ -196,12 +217,14 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
 - `start_line` / `end_line`：函数在源文件中的起止行号。
 - `code`：根据 `start_line` 和 `end_line` 从对应文件中提取的源码片段。
 - `relevent_projects`：克隆组涉及的项目名列表。
-- `pair_similarity`：该组内函数两两之间的相似度信息。
-- `index_pair`：使用 `file_path_startLine_endLine` 组成的稳定标识，便于直接定位具体函数。
-- `summary`：由 `llm_client` 基于 `func_group` 生成的结构化总结对象；若 LLM 不可用或返回值无法解析为合法 JSON，则为 `null`。
-- `共同职责`：这组相似函数在更高层面的共同职责描述。
-- `共同功能`：这组函数在实现层面的共同行为或处理流程。
-- `主要差异点`：这组函数在输入、分支、边界条件或输出上的核心差异。
+- `type1_group`：当前 `func_group` 内按 Type-1 规则归并出的子组列表。
+- `type1_group[].functions`：该 Type-1 组内的函数列表；组内函数除空白字符、布局外完全一致。
+- `type1_group[].group_name`：由 LLM 生成的 Type-1 组名称；若未启用 LLM 或生成失败，则为空字符串。
+- `type1_group[].functionality`：由 LLM 总结的 Type-1 组功能；若未启用 LLM 或生成失败，则为空字符串。
+- `summary`：由 LLM 基于多个 `type1_group` 的信息生成的组间差异总结对象；若 LLM 不可用或返回值无法解析为合法 JSON，则为 `null`。
+- `克隆组名称`：当前 `func_group` 在更高层级上的总称。
+- `总体功能`：多个 Type-1 组在整体上的共同目标或共同职责。
+- `Type1组差异`：同一 `func_group` 内各个 Type-1 组之间的关键实现差异或功能差异。
 - `可能的复用方向`：适合抽象、封装或参数化复用的方向。
 
 ## 项目模块
