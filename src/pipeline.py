@@ -258,7 +258,7 @@ class CloneDetectionPipeline:
             return None
 
         normalized = {}
-        for key in ["克隆组名称", "总体功能", "Type1组差异", "可能的复用方向"]:
+        for key in ["group_name", "overall_functionality", "type1_group_differences", "reuse_opportunities"]:
             value = data.get(key)
             normalized[key] = value if isinstance(value, str) else ""
 

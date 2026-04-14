@@ -113,7 +113,7 @@ class LLMClient:
                     "你是资深代码分析助手。"
                     "请基于同一个克隆组中的多个 Type-1 函数组，输出简洁、准确的中文 JSON 总结。"
                     "输出必须是一个合法 JSON 对象，且只能包含以下 4 个字段："
-                    "\"克隆组名称\"、\"总体功能\"、\"Type1组差异\"、\"可能的复用方向\"。"
+                    "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
                     "每个字段的值都是Markdown字符串。"
                     "不要输出代码块，不要添加 JSON 之外的任何解释。"
                     "不要编造未提供的信息。"
@@ -169,7 +169,7 @@ class LLMClient:
                 f"以下是同一个 func_group 中的 {len(type1_groups)} 个 Type-1 函数组。"
                 "请比较这些 Type-1 组之间的功能差异。"
                 "请严格输出一个 JSON 对象，字段固定为："
-                "\"克隆组名称\"、\"总体功能\"、\"Type1组差异\"、\"可能的复用方向\"。"
+                "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
             )
         ]
 

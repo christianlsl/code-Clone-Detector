@@ -209,10 +209,10 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
       }
     ],
     "summary": {
-      "克隆组名称": "表单状态切换函数组",
-      "总体功能": "这些 Type-1 组共同负责维护表单控件的状态与界面表现。",
-      "Type1组差异": "一个 Type-1 组负责重置状态，另一个负责设置脏状态并向父表单传播。",
-      "可能的复用方向": "可抽取公共处理流程，并将差异逻辑参数化或封装为可配置策略。"
+      "group_name": "表单状态切换函数组",
+      "overall_functionality": "这些 Type-1 组共同负责维护表单控件的状态与界面表现。",
+      "type1_group_differences": "一个 Type-1 组负责重置状态，另一个负责设置脏状态并向父表单传播。",
+      "reuse_opportunities": "可抽取公共处理流程，并将差异逻辑参数化或封装为可配置策略。"
     }
   }
 ]
@@ -230,10 +230,10 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
 - `type1_group[].group_name`：由 LLM 生成的 Type-1 组名称；若未启用 LLM 或生成失败，则为空字符串。
 - `type1_group[].functionality`：由 LLM 总结的 Type-1 组功能；若未启用 LLM 或生成失败，则为空字符串。
 - `summary`：由 LLM 基于多个 `type1_group` 的信息生成的组间差异总结对象；若 LLM 不可用或返回值无法解析为合法 JSON，则为 `null`。
-- `克隆组名称`：当前 `func_group` 在更高层级上的总称。
-- `总体功能`：多个 Type-1 组在整体上的共同目标或共同职责。
-- `Type1组差异`：同一 `func_group` 内各个 Type-1 组之间的关键实现差异或功能差异。
-- `可能的复用方向`：适合抽象、封装或参数化复用的方向。
+- `group_name`：当前 `func_group` 在更高层级上的总称。
+- `overall_functionality`：多个 Type-1 组在整体上的共同目标或共同职责。
+- `type1_group_differences`：同一 `func_group` 内各个 Type-1 组之间的关键实现差异或功能差异。
+- `reuse_opportunities`：适合抽象、封装或参数化复用的方向。
 
 ## 项目模块
 
