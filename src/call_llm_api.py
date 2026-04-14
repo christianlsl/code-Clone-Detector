@@ -1,10 +1,14 @@
 import json
+import os
+import re
 import time
-from typing import Optional, List, Dict
+from typing import Dict, List
 
 import requests
+from dotenv import load_dotenv, find_dotenv
 
-import re
+
+load_dotenv(find_dotenv())
 
 def clean_think_tag(raw):
     return re.sub(r'<think>.*?</think>', '', raw, flags=re.S)
@@ -17,26 +21,25 @@ def clean_think_tag(raw):
 class Qwen3:
 
     def __init__(self):
+        auth_token = os.getenv("HW_AUTH_TOKEN")
+        if not auth_token:
+            raise ValueError("HW_AUTH_TOKEN must be defined in the .env file.")
+
         self.url = "https://apigw.huawei.com/stream/mategpt/v3/chat/completions"
         self.headers = {
             "Content-Type": "application/json",
             "X-HW-ID": "com.huawei.adc.copilot",
             "X-HW-APPKEY": "4bWZesPOKm8uycaoBkU7IQ==",
             "Model-Id": "Qwen3-32B",
-            "X-Auth-Token": "Epj6Rh_8W-yE78qkqE5V6kC2cYwonPOB7gRQO-QLOFX0SqVhBtDv8xlKeGXrSRwlKpsYriFsAJNRZZYvsouOncILyGeLvkO2qapOGdY0fKV3-c9qKSicuFzuXoiNxVq4GrK3IV0Dixa8hk8ZBQLYcXATuZaQEPZXEvYrXAI7tyXlLjBQoxSmgysW0TziGz_xxoIclT5mlU_AmgcHP578Hm471CO7Lyw0zV3j2PDtvdeBdEKyO2-x8xlcTMFWZvm9QvpxU8eVd-19nYdabVXruHDXDjyYJ95qw9oBdopHEKybExqPRgXOMM7WdrZomjBJDFediZ6N9nhCnwXGqweAtw"
+            "X-Auth-Token": auth_token,
         }
         self.timeout = 120
 
-    def generate(self, content: str):
+    def generate(self, messages: List[Dict[str, str]]):
 
         data = {
             "model": "Qwen3-32B",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": f"{content}<no_think>"
-                }
-            ],
+            "messages": messages,
             "max_token": 30000
         }
 
@@ -91,20 +94,22 @@ def call_llm_api(system_prompt: str, user_prompt: str) -> str:
 
     qwen3 = Qwen3()
 
-    # 拼接 system + user
-    content = f"""
-[系统指令]
-{system_prompt}
-
-[用户输入]
-{user_prompt}
-"""
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": user_prompt,
+        },
+    ]
 
     for attempt in range(MAX_RETRIES + 1):
 
         try:
 
-            result = qwen3.generate(content)
+            result = qwen3.generate(messages)
 
             result = clean_think_tag(result)
 

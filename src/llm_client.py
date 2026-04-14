@@ -4,27 +4,56 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from .call_llm_api import Qwen3
+from .config import Config
+
 # 加载 .env 文件中的环境变量
 load_dotenv()
 
 class LLMClient:
-    def __init__(self, model: str = None, apiKey: str = None, baseUrl: str = None, timeout: int = None):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        model: str = None,
+        apiKey: str = None,
+        baseUrl: str = None,
+        timeout: int = None,
+        provider: str = None,
+    ):
         """
-        初始化客户端。优先使用传入参数，如果未提供，则从环境变量加载。
+        初始化客户端。优先使用传入参数，如果未提供，则从配置或环境变量加载。
         """
+        self.provider = (
+            provider
+            or (config.llm_provider if config else None)
+            or os.getenv("LLM_PROVIDER")
+            or "env"
+        ).lower()
+
+        if self.provider not in {"env", "hw"}:
+            raise ValueError("LLM provider must be either 'env' or 'hw'.")
+
+        if self.provider == "hw":
+            self.hw_client = Qwen3()
+            self.model = model or os.getenv("HW_MODEL_ID", "Qwen3-32B")
+            return
+
         self.model = model or os.getenv("LLM_MODEL_ID")
         apiKey = apiKey or os.getenv("LLM_API_KEY")
         baseUrl = baseUrl or os.getenv("LLM_BASE_URL")
         timeout = timeout or int(os.getenv("LLM_TIMEOUT", 60))
-        
+
         if not all([self.model, apiKey, baseUrl]):
             raise ValueError("模型ID、API密钥和服务地址必须被提供或在.env文件中定义。")
 
         self.client = OpenAI(api_key=apiKey, base_url=baseUrl, timeout=timeout)
 
-    def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
+    def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> Optional[str]:
         # print(f"🧠 正在调用 {self.model} 模型...")
         try:
+            if self.provider == "hw":
+                return self.hw_client.generate(messages)
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,

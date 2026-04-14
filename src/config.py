@@ -41,6 +41,13 @@ class Config:
     def log_path(self) -> Path:
         """Get log path."""
         return Path(self.config.get('log_path', './logs'))
+
+    @property
+    def llm_provider(self) -> str:
+        """Get the configured LLM provider."""
+        llm_config = self.config.get('llm') or {}
+        provider = llm_config.get('provider', 'env')
+        return str(provider).lower()
     
     def to_dict(self) -> Dict[str, Any]:
         """Return configuration as dictionary."""

@@ -51,6 +51,7 @@ def main():
         logger.info(f"Data path: {config.data_path}")
         logger.info(f"Output path: {config.output_path}")
         logger.info(f"Log path: {config.log_path}")
+        logger.info(f"LLM provider: {config.llm_provider}")
         
         # Run pipeline
         pipeline = CloneDetectionPipeline(config)

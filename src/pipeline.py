@@ -186,7 +186,7 @@ class CloneDetectionPipeline:
     def _summarize_results(self, results: list[dict]) -> None:
         """Use llm_client to summarize each Type-1 group and compare them in-place."""
         try:
-            llm_client = LLMClient()
+            llm_client = LLMClient(self.config)
         except Exception as e:
             logger.warning(f"LLM client unavailable, skip func_group summary: {e}")
             return

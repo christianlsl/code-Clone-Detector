@@ -11,6 +11,7 @@
 - 将 SAGA 结果解析为结构化 JSON
 - 使用 `llm_client` 对相似函数簇生成结构化 JSON 总结
 - 支持同一文件中的多个函数克隆结果
+- 支持在 `config.yaml` 中切换 LLM 后端：`env` 或 `hw`
 
 ## 目录结构
 
@@ -43,7 +44,13 @@
 data_path: ./testcases
 output_path: ./output
 log_path: ./logs
+llm:
+  provider: env
 ```
+
+当 `llm.provider` 为 `env` 时，使用 OpenAI 兼容接口，并从 `.env` 中读取 `LLM_MODEL_ID`、`LLM_API_KEY`、`LLM_BASE_URL` 和可选的 `LLM_TIMEOUT`。
+
+当 `llm.provider` 为 `hw` 时，使用华为接口，并从 `.env` 中读取 `HW_AUTH_TOKEN`；其余请求头仍保留在代码中。
 
 ### data_path 组织方式
 
@@ -67,7 +74,7 @@ testcases/
 ### 依赖
 
 - Python 3.12+
-- JDK 1.8 or higher 
+- JDK 1.8 or higher
 - `pyyaml`
 - `openai`
 - `python-dotenv`
@@ -82,6 +89,7 @@ uv add pyyaml openai python-dotenv
 
 使用函数簇总结功能前，需要在环境中配置以下变量：
 
+- `HW_AUTH_TOKEN`（华为接口使用）
 - `LLM_MODEL_ID`
 - `LLM_API_KEY`
 - `LLM_BASE_URL`

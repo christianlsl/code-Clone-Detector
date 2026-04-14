@@ -1,3 +1,5 @@
 data_path: ./testcases
 output_path: ./output
 log_path: ./logs
+llm:
+  provider: env
