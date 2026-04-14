@@ -265,9 +265,15 @@ class ResultParser:
         """
         try:
             output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            sorted_results = sorted(
+                results,
+                key=lambda item: len(item.get("func_group", [])),
+                reverse=True,
+            )
             
             with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
+                json.dump(sorted_results, f, indent=2, ensure_ascii=False)
             
             logger.info(f"Results saved to {output_file}")
         except Exception as e:
