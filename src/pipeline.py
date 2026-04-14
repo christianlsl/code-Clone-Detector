@@ -213,6 +213,11 @@ class CloneDetectionPipeline:
             return None
 
         text = summary.strip()
+        # Some models prepend reasoning in think tags before the JSON payload.
+        text = re.sub(r"<think\b[^>]*>.*?</think>", "", text, flags=re.S | re.I)
+        text = re.sub(r"</?think\b[^>]*/?>", "", text, flags=re.I)
+        text = text.strip()
+
         if text.startswith("```"):
             lines = text.splitlines()
             if lines and lines[0].startswith("```"):
