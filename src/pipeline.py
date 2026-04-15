@@ -100,6 +100,8 @@ class CloneDetectionPipeline:
             func_group = result.get("func_group", [])
 
             for func in func_group:
+                code = func.get("code", "")
+                func["function_name"] = self._extract_function_name(code)
                 normalized_code = self._normalize_code_for_type1(func.get("code", ""))
                 grouped.setdefault(normalized_code, []).append(func)
 
@@ -111,6 +113,28 @@ class CloneDetectionPipeline:
                 }
                 for functions in grouped.values()
             ]
+
+    def _extract_function_name(self, code: str) -> list[str]:
+        """Extract all function names from a JavaScript-like snippet."""
+        if not code:
+            return ["anonymous"]
+
+        patterns = [
+            r"\bfunction\s+([A-Za-z_$][\w$]*)\s*\(",
+            r"\b([A-Za-z_$][\w$]*)\s*=\s*function\b",
+            r"\b([A-Za-z_$][\w$]*)\s*:\s*function\b",
+            r"\.prototype\.([A-Za-z_$][\w$]*)\s*=\s*function\b",
+            r"\b([A-Za-z_$][\w$]*)\s*=\s*\([^)]*\)\s*=>",
+            r"\b([A-Za-z_$][\w$]*)\s*:\s*\([^)]*\)\s*=>",
+        ]
+
+        names: list[str] = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, code):
+                names.append(match.group(1))
+
+        unique_names = list(dict.fromkeys(names))
+        return unique_names if unique_names else ["anonymous"]
 
     def _normalize_code_for_type1(self, code: str) -> str:
         """Normalize code for Type-1 grouping by removing comments and whitespace."""
