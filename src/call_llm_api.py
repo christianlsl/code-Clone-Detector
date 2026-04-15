@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import re
@@ -124,3 +125,30 @@ def call_llm_api(system_prompt: str, user_prompt: str) -> str:
             time.sleep(1)
 
     return ""
+
+
+def main():
+    parser = argparse.ArgumentParser(description="调用 Qwen3 API 并输出结果")
+    parser.add_argument(
+        "--system-prompt",
+        default="You are a helpful assistant.",
+        help="system prompt 内容",
+    )
+    parser.add_argument(
+        "--user-prompt",
+        default="请简单介绍一下你自己。",
+        help="user prompt 内容",
+    )
+    args = parser.parse_args()
+
+    try:
+        output = call_llm_api(args.system_prompt, args.user_prompt)
+        print("\n===== LLM OUTPUT =====")
+        print(output)
+    except Exception as e:
+        print(f"调用失败: {e}")
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
