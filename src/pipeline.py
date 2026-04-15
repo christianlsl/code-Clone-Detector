@@ -319,11 +319,11 @@ class CloneDetectionPipeline:
         try:
             data = json.loads(text)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse LLM summary as JSON: {e}")
+            logger.warning(f"Failed to parse LLM summary as JSON: {e}，summary: {text}")
             return None
 
         if not isinstance(data, dict):
-            logger.warning("LLM summary is not a JSON object")
+            logger.warning(f"LLM summary is not a JSON object，data: {data}")
             return None
 
         return data
