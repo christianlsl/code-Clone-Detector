@@ -1,44 +1,31 @@
 # JS 代码克隆检测器
 
-基于 SAGA 的 JavaScript 代码克隆检测工具。程序读取配置和命令行参数，调用 SAGA 对输入目录中的 JS 项目进行分析，然后解析 SAGA 输出并生成 JSON 结果。
+基于 SAGA 的 JavaScript 代码克隆检测工具。程序会调用 SAGA 扫描输入目录，解析克隆结果，并进一步做 Type-1 分组和可选的 LLM 总结。
 
-## 功能
+## 功能概览
 
-- 从 `config.yaml` 读取 `data_path`、`output_path`、`log_path`
-- 支持通过 `-i/--input` 覆盖 `data_path`
-- 调用 SAGA 执行克隆检测
-- 每次运行前自动清理 `thirdparty/saga/result`、`thirdparty/saga/tokenData` 和 `thirdparty/saga/logs`
-- 将 SAGA 结果解析为结构化 JSON
-- 使用 `llm_client` 对相似函数簇生成结构化 JSON 总结
-- 支持同一文件中的多个函数克隆结果
-- 支持在 `config.yaml` 中切换 LLM 后端：`env` 或 `hw`
+- 读取 [config.yaml](config.yaml) 中的 `data_path`、`output_path`、`log_path`、`llm.provider`
+- 运行前自动清理 SAGA 历史产物目录（`result`、`tokenData`、`logs`）
+- 解析 SAGA 输出为结构化 JSON 克隆结果
+- 对每个克隆组构建 Type-1 子组（去除注释与空白差异）
+- 计算 Type-1 子组之间的相似度（两两比较）
+- 可选调用 LLM 生成 Type-1 组摘要和组间差异摘要
 
-## 目录结构
+## 环境要求
 
-```text
-.
-├── main.py
-├── config.yaml
-├── README.md
-├── pyproject.toml
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── logger_setup.py
-│   ├── saga_runner.py
-│   ├── result_parser.py
-│   └── pipeline.py
-└── thirdparty/
-    └── saga/
-        ├── SAGACloneDetector.jar
-        ├── result/
-        ├── tokenData/
-        └── logs/
+- Python 3.12+
+- Java 8+
+- 可执行的 SAGA JAR 文件：`thirdparty/saga/SAGACloneDetector.jar`
+
+## 快速开始
+
+1. 安装依赖
+
+```bash
+uv sync
 ```
 
-## 配置文件
-
-`config.yaml` 默认内容如下：
+2. 准备配置文件（默认已提供）
 
 ```yaml
 data_path: ./testcases
@@ -48,13 +35,20 @@ llm:
   provider: env
 ```
 
-当 `llm.provider` 为 `env` 时，使用 OpenAI 兼容接口，并从 `.env` 中读取 `LLM_MODEL_ID`、`LLM_API_KEY`、`LLM_BASE_URL` 和可选的 `LLM_TIMEOUT`。
+3. 运行
 
-当 `llm.provider` 为 `hw` 时，使用华为接口，并从 `.env` 中读取 `HW_AUTH_TOKEN`；其余请求头仍保留在代码中。
+```bash
+python main.py
+```
 
-### data_path 组织方式
+运行成功后，默认会生成：
 
-`data_path` 目录下的每个子目录都视为一个独立项目。推荐使用如下命名方式：`{num}.{project_name}`。
+- `output/clone_detection_result.json`
+- `output/clone_detection_unprocess_result.json`（仅在启用 LLM 摘要时写入）
+
+## 数据目录约定
+
+`data_path` 下每个一级子目录视为一个独立项目，建议命名为 `{num}.{project_name}`，例如：
 
 ```text
 testcases/
@@ -63,121 +57,69 @@ testcases/
 └── 2.inf_cent/
 ```
 
-其中，输出结果中的 `relevent_projects` 会从目录名中提取 `project_name`，例如：
+输出字段 `relevent_projects` 会从目录名前缀中提取项目名：
 
 - `01.datahub` -> `datahub`
 - `02.sdm_df` -> `sdm_df`
 - `2.inf_cent` -> `inf_cent`
 
-## 安装
+## 命令行参数
 
-### 依赖
+当前入口 [main.py](main.py) 支持以下参数：
 
-- Python 3.12+
-- JDK 1.8 or higher
-- `pyyaml`
-- `openai`
-- `python-dotenv`
+| 参数             | 说明                     |
+| ---------------- | ------------------------ |
+| `-i`, `--input`  | 覆盖配置中的 `data_path` |
+| `-o`, `--output` | 覆盖默认输出文件路径     |
+| `--no-summary`   | 跳过 LLM 摘要阶段        |
 
-### 安装 Python 依赖
+示例：
 
 ```bash
-uv add pyyaml openai python-dotenv
+python main.py -i ./testcases -o ./output/result.json --no-summary
 ```
 
-### LLM 环境变量
+## LLM 配置
 
-使用函数簇总结功能前，需要在环境中配置以下变量：
+通过 [config.yaml](config.yaml) 的 `llm.provider` 切换后端：
 
-- `HW_AUTH_TOKEN`（华为接口使用）
+- `env`：OpenAI 兼容接口
+- `hw`：华为接口（Qwen3）
+
+### provider=env
+
+需要在 `.env` 中配置：
+
 - `LLM_MODEL_ID`
 - `LLM_API_KEY`
 - `LLM_BASE_URL`
 - `LLM_TIMEOUT`（可选，默认 60 秒）
 
-## 运行方式
+### provider=hw
 
-### saga配置
+需要在 `.env` 中配置：
 
-#### 选择系统对应saga脚本
+- `HW_AUTH_TOKEN`
 
-在`thirdparty/saga/executable`中选取与运行操作系统对应的脚本，填入`thirdparty/saga/config.properties`中`exe`字段
-
-#### properties
-
-##### threshold
-
-+ 0.65
-  1. 部分代码段前后顺序颠倒
-  2. 核心功能相似，但>=3个参数/调用服务类型/数据处理逻辑/状态校验等不同（e.g. 记录详细日志&记录错误日志）
-+ 0.7 
-  1. 除了空字符，几乎完全一致的函数
-  2. 内嵌调用
-  3. 部分通用型&专业型脚本函数（e.g. 获取0-30天后需要提醒的邮件列表&获取30天后需要提醒的邮件列表 ；多一些额外的处理逻辑，如解析判断每个接收者前面包含USER前缀）
-  4. 功能相似，但<=2个参数/服务类型不同（e.g. 获取模型名称&获取流程名称；中间一个调用的api不同，但基本的处理逻辑一致）
-
-### 基础运行
-
-```bash
-python3 main.py
-```
-
-### 指定输入路径
-
-```bash
-python3 main.py -i /path/to/js_projects
-```
-
-`-i/--input` 会覆盖 `config.yaml` 中的 `data_path`。
-
-### 指定输出文件
-
-```bash
-python3 main.py -o ./output/result.json
-```
-
-### 指定日志级别
-
-```bash
-python3 main.py -l DEBUG
-```
-
-支持的日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR`
-
-### 常用组合
-
-```bash
-python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
-```
-
-## 命令行参数
-
-| 参数                | 说明                                         |
-| ------------------- | -------------------------------------------- |
-| `-c`, `--config`    | 配置文件路径，默认 `config.yaml`             |
-| `-i`, `--input`     | 输入 JS 项目根目录，覆盖配置中的 `data_path` |
-| `-o`, `--output`    | 输出 JSON 文件路径，覆盖默认输出             |
-| `-l`, `--log-level` | 日志级别                                     |
+说明：当前华为客户端使用固定模型 `Qwen3-32B`。
 
 ## 执行流程
 
-1. 读取配置文件和命令行参数
-2. 使用 SAGA 前清理旧输出目录
-3. 调用 SAGA 分析 `data_path`
-4. 解析 SAGA 输出文件：
-   - `type123_method_group_result.csv`
-   - `MeasureIndex.csv`
-5. 按 `func_group` 中函数源码做 Type-1 分组：
-   - 忽略空白字符和布局差异
-   - 归并出多个 `type1_group`
-6. 使用 `llm_client`：
-   - 总结每个 `type1_group` 的名称和功能
-   - 比较同一 `func_group` 中各个 `type1_group` 的差异
-7. 生成 JSON 文件并写入输出目录
+1. 加载配置并解析命令行参数
+2. 调用 SAGA 前清理旧输出目录
+3. 执行 SAGA 克隆检测
+4. 解析 `type123_method_group_result.csv` 与 `MeasureIndex.csv`
+5. 组装 `func_group`，并提取函数源码
+6. 构建 `type1_group`（按去注释、去空白后的代码归并）
+7. 计算 `type1_group_similarity`
+8. 可选调用 LLM：
+   - 生成每个 Type-1 组的 `group_name` 和 `functionality`
+   - 生成组间 `summary`
+9. 保存最终 JSON 结果
 
-## 输出结果格式
+## 输出结构
 
-默认输出文件为 `output/clone_detection_result.json`。
+主输出文件默认是 `output/clone_detection_result.json`。
 
 ```json
 [
@@ -185,104 +127,79 @@ python3 main.py -c config.yaml -i ./testcases -o ./output/result.json -l INFO
     "func_group": [
       {
         "file_path": "01.datahub/modules/split/ngModel.js",
-        "start_line": 120,
-        "end_line": 160,
-        "code": "function foo() { ... }"
-      },
-      {
-        "file_path": "01.datahub/modules/split/ngModel.js",
-        "start_line": 300,
-        "end_line": 340,
-        "code": "function bar() { ... }"
+        "start_line": 396,
+        "end_line": 401,
+        "code": "...",
+        "function_name": ["$setPristine"]
       }
     ],
-    "relevent_projects": ["datahub", "sdm_df"],
+    "relevent_projects": ["datahub"],
     "type1_group": [
       {
-        "group_name": "表单状态重置函数组",
-        "functionality": "负责重置表单元素状态并同步相关 CSS 类。",
+        "group_name": "...",
+        "functionality": "...",
         "functions": [
           {
             "file_path": "01.datahub/modules/split/ngModel.js",
-            "start_line": 120,
-            "end_line": 160,
-            "code": "function foo() { ... }"
-          }
-        ]
-      },
-      {
-        "group_name": "表单状态置脏函数组",
-        "functionality": "负责将表单元素标记为已修改，并通知父表单。",
-        "functions": [
-          {
-            "file_path": "02.sdm_df/messageFormatParser.js",
-            "start_line": 80,
-            "end_line": 110,
-            "code": "function bar() { ... }"
+            "start_line": 396,
+            "end_line": 401,
+            "code": "...",
+            "function_name": ["$setPristine"]
           }
         ]
       }
     ],
+    "type1_group_similarity": [
+      {
+        "group_a_index": 0,
+        "group_b_index": 1,
+        "similarity": 0.8731
+      }
+    ],
     "summary": {
-      "group_name": "表单状态切换函数组",
-      "overall_functionality": "这些 Type-1 组共同负责维护表单控件的状态与界面表现。",
-      "type1_group_differences": "一个 Type-1 组负责重置状态，另一个负责设置脏状态并向父表单传播。",
-      "reuse_opportunities": "可抽取公共处理流程，并将差异逻辑参数化或封装为可配置策略。"
+      "group_name": "...",
+      "overall_functionality": "...",
+      "type1_group_differences": "...",
+      "reuse_opportunities": "..."
     }
   }
 ]
 ```
 
-### 字段说明
+字段说明：
 
-- `func_group`：一个克隆组中的函数列表。
-- `file_path`：相对 `data_path` 的文件路径。
-- `start_line` / `end_line`：函数在源文件中的起止行号。
-- `code`：根据 `start_line` 和 `end_line` 从对应文件中提取的源码片段。
-- `relevent_projects`：克隆组涉及的项目名列表。
-- `type1_group`：当前 `func_group` 内按 Type-1 规则归并出的子组列表。
-- `type1_group[].functions`：该 Type-1 组内的函数列表；组内函数除空白字符、布局外完全一致。
-- `type1_group[].group_name`：由 LLM 生成的 Type-1 组名称；若未启用 LLM 或生成失败，则为空字符串。
-- `type1_group[].functionality`：由 LLM 总结的 Type-1 组功能；若未启用 LLM 或生成失败，则为空字符串。
-- `summary`：由 LLM 基于多个 `type1_group` 的信息生成的组间差异总结对象；若 LLM 不可用或返回值无法解析为合法 JSON，则为 `null`。
-- `group_name`：当前 `func_group` 在更高层级上的总称。
-- `overall_functionality`：多个 Type-1 组在整体上的共同目标或共同职责。
-- `type1_group_differences`：同一 `func_group` 内各个 Type-1 组之间的关键实现差异或功能差异。
-- `reuse_opportunities`：适合抽象、封装或参数化复用的方向。
+- `func_group`：一个克隆组中的函数片段列表
+- `function_name`：基于正则从代码片段中提取的函数名（可能有多个）
+- `relevent_projects`：该克隆组涉及的项目名集合
+- `type1_group`：同一 `func_group` 内按 Type-1 规则聚类后的子组
+- `type1_group_similarity`：Type-1 子组两两相似度（`SequenceMatcher`）
+- `summary`：LLM 生成的组间摘要；若关闭或失败则可能为 `null`
 
-## 项目模块
+## 关键模块
 
-### `src/config.py`
+- [main.py](main.py)：命令行入口，负责参数解析、日志初始化、启动流水线
+- [src/pipeline.py](src/pipeline.py)：总流程编排（SAGA -> 解析 -> 分组 -> 相似度 -> LLM -> 保存）
+- [src/saga_runner.py](src/saga_runner.py)：清理旧结果并执行 SAGA
+- [src/result_parser.py](src/result_parser.py)：解析 SAGA 结果并提取源码
+- [src/llm_client.py](src/llm_client.py)：封装 LLM 调用（`env` / `hw`）
 
-负责读取 `config.yaml` 并暴露 `data_path`、`output_path` 和 `log_path`。
+## 常见问题
 
-### `src/logger_setup.py`
+1. 提示找不到 SAGA JAR
 
-负责配置控制台和文件日志。
+- 检查 `thirdparty/saga/SAGACloneDetector.jar` 是否存在。
 
-### `src/saga_runner.py`
+2. LLM 摘要没有生成
 
-负责清理旧输出并调用 SAGA 执行分析。
+- 检查 `.env` 变量是否齐全。
+- 可先运行 `python main.py --no-summary` 验证纯检测流程。
 
-### `src/result_parser.py`
+3. 输出为空或很少
 
-负责解析 SAGA 输出文件，生成最终 JSON。
+- 检查 `data_path` 是否正确。
+- 检查输入目录中是否包含可被 SAGA 识别的源码文件。
 
-### `src/pipeline.py`
+## 备注
 
-负责编排整体流程：配置读取、SAGA 执行、结果解析与保存。
-
-## 注意事项
-
-- 运行前请确认 `thirdparty/saga/SAGACloneDetector.jar` 存在
-- 运行目录建议为项目根目录
-- 如果结果不符合预期，可使用 `-l DEBUG` 查看详细日志
-- 每次运行会清理 SAGA 旧结果，请确保不需要保留历史输出
-
-## 示例
-
-```bash
-python3 main.py -i ./testcases -o ./output/clone_detection_result.json
-```
-
-运行后会在输出目录生成 JSON 结果，并在日志目录写入运行日志。若已正确配置 LLM 环境变量，输出中的 `summary` 字段会包含结构化 JSON 总结。
+- 每次运行都会删除 `thirdparty/saga/result`、`thirdparty/saga/tokenData`、`thirdparty/saga/logs` 旧数据。
+- 程序默认使用 `INFO` 级别日志输出。

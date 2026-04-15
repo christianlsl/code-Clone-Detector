@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Optional
 
@@ -75,6 +76,9 @@ class CloneDetectionPipeline:
             logger.info("Step 3: Building Type-1 clone groups...")
             self._build_type1_groups(results)
 
+            logger.info("Step 3.1: Calculating Type-1 group similarities...")
+            self._calculate_type1_group_similarity(results)
+
             # Step 4: Summarize clone groups with LLM
             if summarize:
                 logger.info("Step 4: Summarizing clone groups with LLM...")
@@ -113,6 +117,37 @@ class CloneDetectionPipeline:
                 }
                 for functions in grouped.values()
             ]
+
+    def _calculate_type1_group_similarity(self, results: list[dict]) -> None:
+        """Calculate pairwise similarity between Type-1 groups within each clone group."""
+        for result in results:
+            type1_groups = result.get("type1_group", [])
+            similarity_pairs: list[dict[str, Any]] = []
+
+            if len(type1_groups) < 2:
+                result["type1_group_similarity"] = similarity_pairs
+                continue
+
+            normalized_codes: list[str] = []
+            for type1_group in type1_groups:
+                functions = type1_group.get("functions", [])
+                representative_code = ""
+                if functions:
+                    representative_code = functions[0].get("code", "")
+                normalized_codes.append(self._normalize_code_for_type1(representative_code))
+
+            for i in range(len(type1_groups)):
+                for j in range(i + 1, len(type1_groups)):
+                    score = SequenceMatcher(None, normalized_codes[i], normalized_codes[j]).ratio()
+                    similarity_pairs.append(
+                        {
+                            "group_a_index": i,
+                            "group_b_index": j,
+                            "similarity": round(score, 4),
+                        }
+                    )
+
+            result["type1_group_similarity"] = similarity_pairs
 
     def _extract_function_name(self, code: str) -> list[str]:
         """Extract all function names from a JavaScript-like snippet."""
