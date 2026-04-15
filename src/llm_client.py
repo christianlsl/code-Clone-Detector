@@ -91,7 +91,7 @@ class LLMClient:
                     "请基于给定的一组 Type-1 克隆函数，输出简洁、准确的中文 JSON 总结。"
                     "输出必须是一个合法 JSON 对象，且只能包含以下 2 个字段："
                     "\"group_name\"、\"functionality\"。"
-                    "每个字段的值都是字符串。"
+                    "每个字段的值都是字符串，并且字符串需要能被json.loads解析，不要出现未转义的特殊字符。"
                     "不要输出代码块，不要添加 JSON 之外的任何解释。"
                     "不要编造未提供的信息。"
                 ),
@@ -116,7 +116,7 @@ class LLMClient:
                     "请基于同一个克隆组中的多个 Type-1 函数组，输出简洁、准确的中文 JSON 总结。"
                     "输出必须是一个合法 JSON 对象，且只能包含以下 4 个字段："
                     "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
-                    "每个字段的值都是Markdown字符串。"
+                    "每个字段的值都是Markdown字符串，并且字符串需要能被json.loads解析，不要出现未转义的特殊字符。"
                     "不要输出代码块，不要添加 JSON 之外的任何解释。"
                     "不要编造未提供的信息。"
                 ),
