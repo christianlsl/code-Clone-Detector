@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from .call_llm_api import Qwen3
+from .call_llm_api import Qwen3, clean_think_tag
 from .config import Config
 
 # 加载 .env 文件中的环境变量
@@ -52,7 +52,9 @@ class LLMClient:
         # print(f"🧠 正在调用 {self.model} 模型...")
         try:
             if self.provider == "hw":
-                return self.hw_client.generate(messages)
+                result = self.hw_client.generate(messages)
+                result = clean_think_tag(result)
+                return result.strip()
 
             response = self.client.chat.completions.create(
                 model=self.model,
