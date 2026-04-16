@@ -138,6 +138,7 @@ class LLMClient:
                 "这些函数除空白字符和布局外完全一致。"
                 "请严格输出一个 JSON 对象，字段固定为："
                 "\"group_name\"、\"functionality\"。"
+                "每个字段为简洁、准确的中文字符串。"
             )
         ]
 
@@ -172,6 +173,7 @@ class LLMClient:
                 "请比较这些 Type-1 组之间的功能差异。"
                 "请严格输出一个 JSON 对象，字段固定为："
                 "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
+                "每个字段为简洁、准确的中文字符串。"
             )
         ]
 
