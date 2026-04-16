@@ -130,8 +130,8 @@ class LLMClient:
 
     def _build_type1_group_prompt(self, functions: List[Dict[str, Any]]) -> str:
         """构造 Type-1 函数组总结提示词。"""
-        max_functions = 6
-        max_code_chars = 1200
+        max_functions = 4
+        max_code_chars = 800
         prompt_parts = [
             (
                 f"以下是一个包含 {len(functions)} 个 Type-1 克隆函数的函数组。"
@@ -165,8 +165,8 @@ class LLMClient:
 
     def _build_type1_comparison_prompt(self, type1_groups: List[Dict[str, Any]]) -> str:
         """构造 Type-1 函数组间比较提示词。"""
-        max_groups = 8
-        max_code_chars = 1000
+        max_groups = 6
+        max_code_chars = 800
         prompt_parts = [
             (
                 f"以下是同一个 func_group 中的 {len(type1_groups)} 个 Type-1 函数组。"
