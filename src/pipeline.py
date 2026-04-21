@@ -3,6 +3,8 @@
 import json
 import logging
 import re
+import shutil
+import tempfile
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Optional
@@ -14,6 +16,8 @@ from .llm_client import LLMClient
 
 
 logger = logging.getLogger(__name__)
+
+CATEGORIES = ("PAGE", "SERVICE")
 
 
 class CloneDetectionPipeline:
@@ -57,38 +61,70 @@ class CloneDetectionPipeline:
             logger.info(f"Starting clone detection pipeline")
             logger.info(f"Data path: {data_path}")
             logger.info(f"Output file: {output_file}")
-            
-            # Step 2: Run SAGA
-            logger.info("Step 1: Running SAGA clone detector...")
-            if not self.saga_runner.run(data_path):
-                logger.error("SAGA execution failed")
-                return False
-            
-            # Step 3: Parse results
-            logger.info("Step 2: Parsing SAGA results...")
-            result_dir = self.saga_runner.get_results_path()
-            
-            parser = ResultParser(result_dir, data_path)
-            results = parser.parse()
-            
-            logger.info(f"Found {len(results)} clone groups")
 
-            logger.info("Step 3: Building Type-1 clone groups...")
-            self._build_type1_groups(results)
+            # Step 2: Collect PAGE/SERVICE JS files by strict directory segment.
+            categorized_files = self._collect_categorized_js_files(data_path)
+            total_candidates = sum(len(files) for files in categorized_files.values())
+            logger.info(f"Found {total_candidates} candidate JS files in PAGE/SERVICE directories")
 
-            logger.info("Step 3.1: Calculating Type-1 group similarities...")
-            self._calculate_type1_group_similarity(results)
+            results: list[dict[str, Any]] = []
+            parser_for_save: Optional[ResultParser] = None
+
+            # Step 3: Run SAGA separately for PAGE and SERVICE.
+            for category in CATEGORIES:
+                files = categorized_files[category]
+                logger.info(f"Category {category}: {len(files)} input files")
+                if not files:
+                    logger.info(f"Category {category}: no matching files, skipping")
+                    continue
+
+                with tempfile.TemporaryDirectory(prefix=f"clone_input_{category.lower()}_") as temp_dir:
+                    staging_dir = Path(temp_dir)
+                    self._build_staging_directory(staging_dir, data_path, files)
+
+                    logger.info(f"Step 3 ({category}): Running SAGA clone detector...")
+                    if not self.saga_runner.run(staging_dir):
+                        logger.error(f"SAGA execution failed for category {category}")
+                        return False
+
+                    logger.info(f"Step 4 ({category}): Parsing SAGA results...")
+                    result_dir = self.saga_runner.get_results_path()
+                    parser = ResultParser(result_dir, staging_dir)
+                    category_results = parser.parse()
+                    parser_for_save = parser
+
+                    logger.info(f"Category {category}: found {len(category_results)} clone groups")
+
+                    logger.info(f"Step 5 ({category}): Building Type-1 clone groups...")
+                    self._build_type1_groups(category_results)
+
+                    logger.info(f"Step 5.1 ({category}): Calculating Type-1 group similarities...")
+                    self._calculate_type1_group_similarity(category_results)
+
+                    for result in category_results:
+                        result["category"] = category
+
+                    results.extend(category_results)
+
+            if not results:
+                logger.info("No clone groups found for PAGE/SERVICE JS files")
 
             # Step 4: Summarize clone groups with LLM
             if summarize:
-                logger.info("Step 4: Summarizing clone groups with LLM...")
+                logger.info("Step 6: Summarizing clone groups with LLM...")
                 self._summarize_results(results)
             else:
-                logger.info("Step 4: Skipping LLM summary generation")
+                logger.info("Step 6: Skipping LLM summary generation")
             
-            # Step 5: Save results
-            logger.info("Step 5: Saving results...")
-            parser.save_results(results, output_file)
+            # Step 7: Save results
+            logger.info("Step 7: Saving results...")
+            if parser_for_save is not None:
+                parser_for_save.save_results(results, output_file)
+            else:
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                with output_file.open("w", encoding="utf-8") as f:
+                    json.dump([], f, indent=2, ensure_ascii=False)
+                logger.info(f"Results saved to {output_file}")
             
             logger.info("Clone detection completed successfully")
             return True
@@ -96,6 +132,36 @@ class CloneDetectionPipeline:
         except Exception as e:
             logger.error(f"Pipeline failed: {e}", exc_info=True)
             return False
+
+    def _collect_categorized_js_files(self, data_path: Path) -> dict[str, list[Path]]:
+        """Collect .js files whose path segments include strict PAGE/SERVICE directory names."""
+        categorized: dict[str, list[Path]] = {category: [] for category in CATEGORIES}
+        for file_path in data_path.rglob("*.js"):
+            if not file_path.is_file():
+                continue
+
+            parts = set(file_path.parts)
+            in_page = "PAGE" in parts
+            in_service = "SERVICE" in parts
+
+            if in_page and in_service:
+                logger.warning(f"Skipping ambiguous category file: {file_path}")
+                continue
+
+            if in_page:
+                categorized["PAGE"].append(file_path)
+            if in_service:
+                categorized["SERVICE"].append(file_path)
+
+        return categorized
+
+    def _build_staging_directory(self, staging_dir: Path, data_path: Path, files: list[Path]) -> None:
+        """Copy matched files into a temporary directory while preserving relative structure."""
+        for source_file in files:
+            relative_path = source_file.relative_to(data_path)
+            target_file = staging_dir / relative_path
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, target_file)
 
     def _build_type1_groups(self, results: list[dict]) -> None:
         """Group functions that are identical after comment and whitespace normalization."""
@@ -255,6 +321,7 @@ class CloneDetectionPipeline:
         for index, result in enumerate(results, start=1):
             type1_groups = result.get("type1_group", [])
             raw_result: dict[str, Any] = {
+                "category": result.get("category"),
                 "func_group": result.get("func_group", []),
                 "type1_group_outputs": [],
                 "group_comparison_output": None,
