@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import List, Dict, Any, Optional
 
@@ -7,8 +8,10 @@ from openai import OpenAI
 from .call_llm_api import Qwen3, clean_think_tag
 from .config import Config
 
+logger = logging.getLogger(__name__)
+
 # 加载 .env 文件中的环境变量
-load_dotenv()
+load_dotenv(override=True)
 
 class LLMClient:
     def __init__(
@@ -49,11 +52,11 @@ class LLMClient:
         self.client = OpenAI(api_key=apiKey, base_url=baseUrl, timeout=timeout)
 
     def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> Optional[str]:
-        # print(f"🧠 正在调用 {self.model} 模型...")
         try:
             if self.provider == "hw":
                 result = self.hw_client.generate(messages)
                 result = clean_think_tag(result)
+                logger.info("LLM响应: %s", result.strip())
                 return result.strip()
 
             response = self.client.chat.completions.create(
@@ -62,20 +65,22 @@ class LLMClient:
                 temperature=temperature,
                 stream=True,
             )
-            
+
             # 处理流式响应
-            # print("✅ 大语言模型响应成功:")
             collected_content = []
             for chunk in response:
-                content = chunk.choices[0].delta.content or ""
-                # print(content, end="", flush=True)
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                content = delta.content or ""
                 collected_content.append(content)
-            # print()  # 在流式输出结束后换行
-            # print("".join(collected_content))
-            return "".join(collected_content)
+
+            result = "".join(collected_content)
+            logger.info("LLM响应: %s", result)
+            return result
 
         except Exception as e:
-            print(f"❌ 调用LLM API时发生错误: {e}")
+            logger.error("调用LLM API时发生错误: %s", e, exc_info=True)
             return None
 
     def summarize_type1_group(self, functions: List[Dict[str, Any]]) -> Optional[str]:
