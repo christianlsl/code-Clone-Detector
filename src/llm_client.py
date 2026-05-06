@@ -1,17 +1,22 @@
+import json
 import logging
 import os
+import re
 from typing import List, Dict, Any, Optional
 
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
-from .call_llm_api import Qwen3, clean_think_tag
 from .config import Config
 
 logger = logging.getLogger(__name__)
 
 # 加载 .env 文件中的环境变量
 load_dotenv(override=True)
+
+def clean_think_tag(raw: str) -> str:
+    """Remove <think>...</think> tags from LLM output."""
+    return re.sub(r'<think>.*?</think>', '', raw, flags=re.S)
 
 class LLMClient:
     def __init__(
@@ -23,9 +28,6 @@ class LLMClient:
         timeout: int = None,
         provider: str = None,
     ):
-        """
-        初始化客户端。优先使用传入参数，如果未提供，则从配置或环境变量加载。
-        """
         self.provider = (
             provider
             or (config.llm_provider if config else None)
@@ -37,45 +39,87 @@ class LLMClient:
             raise ValueError("LLM provider must be either 'env' or 'hw'.")
 
         if self.provider == "hw":
-            self.hw_client = Qwen3()
             self.model = model or os.getenv("HW_MODEL_ID", "Qwen3-32B")
-            return
-
-        self.model = model or os.getenv("LLM_MODEL_ID")
-        apiKey = apiKey or os.getenv("LLM_API_KEY")
-        baseUrl = baseUrl or os.getenv("LLM_BASE_URL")
-        timeout = timeout or int(os.getenv("LLM_TIMEOUT", 60))
-
-        if not all([self.model, apiKey, baseUrl]):
-            raise ValueError("模型ID、API密钥和服务地址必须被提供或在.env文件中定义。")
-
-        self.client = OpenAI(api_key=apiKey, base_url=baseUrl, timeout=timeout)
+            self.api_key = apiKey or os.getenv("HW_AUTH_TOKEN")
+            self.base_url = baseUrl or os.getenv(
+                "HW_BASE_URL",
+                "https://apigw.huawei.com/stream/mategpt/v3",
+            )
+            self.timeout = timeout or int(os.getenv("HW_TIMEOUT", 120))
+            if not self.api_key:
+                raise ValueError("HW_AUTH_TOKEN must be defined in the .env file.")
+        else:
+            self.model = model or os.getenv("LLM_MODEL_ID")
+            self.api_key = apiKey or os.getenv("LLM_API_KEY")
+            self.base_url = baseUrl or os.getenv("LLM_BASE_URL")
+            self.timeout = timeout or int(os.getenv("LLM_TIMEOUT", 60))
+            if not all([self.model, self.api_key, self.base_url]):
+                raise ValueError(
+                    "模型ID、API密钥和服务地址必须被提供或在.env文件中定义。"
+                )
 
     def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> Optional[str]:
         try:
+            url = f"{self.base_url.rstrip('/')}/chat/completions"
+
             if self.provider == "hw":
-                result = self.hw_client.generate(messages)
-                result = clean_think_tag(result)
-                logger.info("LLM响应: %s", result.strip())
-                return result.strip()
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-HW-ID": "com.huawei.adc.copilot",
+                    "X-HW-APPKEY": "4bWZesPOKm8uycaoBkU7IQ==",
+                    "Model-Id": self.model,
+                    "X-Auth-Token": self.api_key,
+                }
+                data = {
+                    "model": self.model,
+                    "messages": messages,
+                    "max_token": 30000,
+                    "stream": True,
+                }
+            else:
+                headers = {
+                    "Content-Type": "application/json",
+                    "api-key": self.api_key,
+                }
+                data = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_completion_tokens": 4096,
+                    "stream": True,
+                }
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                stream=True,
+            response = requests.post(
+                url, headers=headers, json=data, stream=True, timeout=self.timeout,
             )
+            response.raise_for_status()
 
-            # 处理流式响应
             collected_content = []
-            for chunk in response:
-                if not chunk.choices:
+            for line in response.iter_lines():
+                if not line:
                     continue
-                delta = chunk.choices[0].delta
-                content = delta.content or ""
-                collected_content.append(content)
+                decoded = line.decode("utf-8")
 
-            result = "".join(collected_content)
+                # hw: "data:{json}", env: "data: {json}"
+                if decoded.startswith("data:"):
+                    payload = decoded[5:].strip()
+                elif decoded.startswith("data: "):
+                    payload = decoded[6:].strip()
+                else:
+                    continue
+
+                if payload == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(payload)
+                    delta = chunk["choices"][0].get("delta", {})
+                    content = delta.get("content") or ""
+                    collected_content.append(content)
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+
+            result = clean_think_tag("".join(collected_content))
             logger.info("LLM响应: %s", result)
             return result
 
