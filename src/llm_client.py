@@ -162,7 +162,7 @@ class LLMClient:
                 "role": "system",
                 "content": (
                     "你是资深代码分析助手。"
-                    "请基于同一个克隆组中的多个 Type-1 函数组，输出简洁、准确的中文 JSON 总结。"
+                    "请基于同一个克隆组中的多个相同函数组，输出简洁、准确的中文 JSON 总结。"
                     "输出必须是一个合法 JSON 对象，且只能包含以下 4 个字段："
                     "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
                     "每个字段的值都是Markdown字符串，并且字符串需要能被json.loads解析，不要出现未转义的特殊字符。"
@@ -183,7 +183,7 @@ class LLMClient:
         max_code_chars = 800
         prompt_parts = [
             (
-                f"以下是一个包含 {len(functions)} 个 Type-1 克隆函数的函数组。"
+                f"以下是一个包含 {len(functions)} 个克隆函数的相同函数组。"
                 "这些函数除空白字符和布局外完全一致。"
                 "请严格输出一个 JSON 对象，字段固定为："
                 "\"group_name\"、\"functionality\"。"
@@ -207,7 +207,7 @@ class LLMClient:
 
         if len(functions) > max_functions:
             prompt_parts.append(
-                f"\n其余 {len(functions) - max_functions} 个函数未展开，请根据样本总结该 Type-1 组。"
+                f"\n其余 {len(functions) - max_functions} 个函数未展开，请根据样本总结该相同函数组。"
             )
 
         return "\n\n".join(prompt_parts)
@@ -218,8 +218,8 @@ class LLMClient:
         max_code_chars = 800
         prompt_parts = [
             (
-                f"以下是同一个 func_group 中的 {len(type1_groups)} 个 Type-1 函数组。"
-                "请比较这些 Type-1 组之间的功能差异。"
+                f"以下是同一个 func_group 中的 {len(type1_groups)} 个相同函数组。"
+                "请比较这些相同函数组之间的功能差异。"
                 "请严格输出一个 JSON 对象，字段固定为："
                 "\"group_name\"、\"overall_functionality\"、\"type1_group_differences\"、\"reuse_opportunities\"。"
                 "每个字段为简洁、准确的中文字符串。"
@@ -247,7 +247,7 @@ class LLMClient:
 
         if len(type1_groups) > max_groups:
             prompt_parts.append(
-                f"\n其余 {len(type1_groups) - max_groups} 个 Type-1 组未展开，请基于已提供信息完成组间比较。"
+                f"\n其余 {len(type1_groups) - max_groups} 个相同函数组未展开，请基于已提供信息完成组间比较。"
             )
 
         return "\n\n".join(prompt_parts)
