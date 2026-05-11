@@ -79,14 +79,11 @@ class LLMClient:
             else:
                 headers = {
                     "Content-Type": "application/json",
-                    "api-key": self.api_key,
+                    "Authorization": f"Bearer {self.api_key}",
                 }
                 data = {
                     "model": self.model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_completion_tokens": 4096,
-                    "stream": True,
+                    "messages": messages
                 }
 
             response = requests.post(
@@ -94,32 +91,42 @@ class LLMClient:
             )
             response.raise_for_status()
 
-            collected_content = []
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                decoded = line.decode("utf-8")
+            # 检查是否为 SSE 流式响应
+            content_type = response.headers.get("Content-Type", "")
+            if "text/event-stream" in content_type:
+                collected_content = []
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    decoded = line.decode("utf-8")
 
-                # hw: "data:{json}", env: "data: {json}"
-                if decoded.startswith("data:"):
-                    payload = decoded[5:].strip()
-                elif decoded.startswith("data: "):
-                    payload = decoded[6:].strip()
-                else:
-                    continue
+                    # hw: "data:{json}", env: "data: {json}"
+                    if decoded.startswith("data:"):
+                        payload = decoded[5:].strip()
+                    elif decoded.startswith("data: "):
+                        payload = decoded[6:].strip()
+                    else:
+                        continue
 
-                if payload == "[DONE]":
-                    break
+                    if payload == "[DONE]":
+                        break
 
-                try:
-                    chunk = json.loads(payload)
-                    delta = chunk["choices"][0].get("delta", {})
-                    content = delta.get("content") or ""
-                    collected_content.append(content)
-                except (json.JSONDecodeError, KeyError, IndexError):
-                    continue
+                    try:
+                        chunk = json.loads(payload)
+                        delta = chunk["choices"][0].get("delta", {})
+                        content = delta.get("content") or ""
+                        collected_content.append(content)
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
 
-            result = clean_think_tag("".join(collected_content))
+                result = clean_think_tag("".join(collected_content))
+            else:
+                # 非流式响应：直接从 JSON 中提取 content
+                resp_json = response.json()
+                logger.debug("API响应: %s", resp_json)
+                result = clean_think_tag(
+                    resp_json["choices"][0]["message"]["content"] or ""
+                )
             logger.info("LLM响应: %s", result)
             return result
 
