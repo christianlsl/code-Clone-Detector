@@ -13,49 +13,62 @@
 
 ## 环境要求
 
-- Python 3.12+
+- Python 3.10+
 - Java 8+
 - 可执行的 SAGA JAR 文件：`thirdparty/saga/SAGACloneDetector.jar`
 
 ## 快速开始
 
-1. 安装依赖
+### 1. 安装依赖
 
 ```bash
 uv sync
 ```
 
-2. 准备配置文件（默认已提供）
+### 2. 准备配置文件
+
+#### config.yaml
+
+修改项目目录下的 config.yaml，提供数据源文件夹和 llm provider（env/hw）：
 
 ```yaml
-data_path: ./testcases
+data_path: 项目文件夹绝对路径
 output_path: ./output
 log_path: ./logs
 llm:
   provider: env
 ```
 
-3. saga配置
+#### .env
 
-   + 选择系统对应saga脚本
+根据所选的 `llm.provider`，在项目根目录创建 `.env` 文件并填写对应变量：
 
-     在`thirdparty/saga/executable`中选取与运行操作系统对应的脚本，填入`thirdparty/saga/config.properties`中`exe`字段
+**provider=env**（OpenAI 兼容接口）：
 
-   + properties
+- `LLM_MODEL_ID`
+- `LLM_API_KEY`
+- `LLM_BASE_URL`
+- `LLM_TIMEOUT`（可选，默认 60 秒）
 
-     + **threshold**
+**provider=hw**（华为接口，使用固定模型 `Qwen3-32B`）：
 
-       + 0.65
-         1. 部分代码段前后顺序颠倒
-         2. 核心功能相似，但>=3个参数/调用服务类型/数据处理逻辑/状态校验等不同（e.g. 记录详细日志&记录错误日志）
+- `HW_AUTH_TOKEN`
 
-       + 0.7 
-         1. 除了空字符，几乎完全一致的函数
-            1. 内嵌调用
-            2. 部分通用型&专业型脚本函数（e.g. 获取0-30天后需要提醒的邮件列表&获取30天后需要提醒的邮件列表 ；多一些额外的处理逻辑，如解析判断每个接收者前面包含USER前缀）
-            3. 功能相似，但<=2个参数/服务类型不同（e.g. 获取模型名称&获取流程名称；中间一个调用的api不同，但基本的处理逻辑一致）
+#### SAGA 配置
 
-4. 运行
+编辑 `thirdparty/saga/config.properties`，重点关注以下字段：
+
+- **`exe`**：指定操作系统对应的 SAGA 可执行程序。默认值为 `executable/psacd_mac`（macOS）。如果在 **Linux** 环境下运行，需修改为 `executable/psacd_linux`。可到 `thirdparty/saga/executable` 目录查看所有可用的可执行程序。
+
+- **`threshold`**：克隆检测的相似度阈值（0 ~ 1），**建议调整为 0.7**。不同阈值的效果参考：
+  - **0.65**：较宽松，能捕获：
+    1. 部分代码段前后顺序颠倒
+    2. 核心功能相似，但 >=3 个参数/调用服务类型/数据处理逻辑/状态校验等不同（e.g. 记录详细日志 & 记录错误日志）
+  - **0.7**：较严格，主要匹配：
+    1. 除了空字符，几乎完全一致的函数（内嵌调用、部分通用型 & 专业型脚本函数）
+    2. 功能相似，但 <=2 个参数/服务类型不同（e.g. 获取模型名称 & 获取流程名称；中间一个调用的 api 不同，但基本的处理逻辑一致）
+
+### 3. 运行
 
 ```bash
 python main.py
@@ -64,23 +77,23 @@ python main.py
 运行成功后，默认会生成：
 
 - `output/clone_detection_result.json`
-- `output/clone_detection_unprocess_result.json`（仅在启用 LLM 摘要时写入）
+- `output/clone_detection_unprocess_result.json`（仅在启用 LLM 摘要时写入，用于debug，查看llm原始输出）
 
 ## 数据目录约定
 
-`data_path` 下每个一级子目录视为一个独立项目，建议命名为 `{num}.{project_name}`，例如：
+`data_path` 下每个一级子目录视为一个独立项目，建议命名为 `{num}.{project_name}`或`{project_name}`，例如：
 
 ```text
 testcases/
 ├── 01.datahub/
-├── 02.sdm_df/
+├── sdm_df/
 └── 2.inf_cent/
 ```
 
 输出字段 `relevent_projects` 会从目录名前缀中提取项目名：
 
 - `01.datahub` -> `datahub`
-- `02.sdm_df` -> `sdm_df`
+- `sdm_df` -> `sdm_df`
 - `2.inf_cent` -> `inf_cent`
 
 ## 命令行参数
@@ -98,30 +111,6 @@ testcases/
 ```bash
 python main.py -i ./testcases -o ./output/result.json --no-summary
 ```
-
-## LLM 配置
-
-通过 [config.yaml](config.yaml) 的 `llm.provider` 切换后端：
-
-- `env`：OpenAI 兼容接口
-- `hw`：华为接口（Qwen3）
-
-### provider=env
-
-需要在 `.env` 中配置：
-
-- `LLM_MODEL_ID`
-- `LLM_API_KEY`
-- `LLM_BASE_URL`
-- `LLM_TIMEOUT`（可选，默认 60 秒）
-
-### provider=hw
-
-需要在 `.env` 中配置：
-
-- `HW_AUTH_TOKEN`
-
-说明：当前华为客户端使用固定模型 `Qwen3-32B`。
 
 ## 执行流程
 
