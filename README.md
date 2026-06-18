@@ -33,7 +33,7 @@ uv sync
 
 ```yaml
 data_path: 项目文件夹绝对路径
-output_path: ./output
+output_path: 输出文件夹
 log_path: ./logs
 llm:
   provider: env
@@ -84,7 +84,7 @@ python main.py
 `data_path` 下每个一级子目录视为一个独立项目，建议命名为 `{num}.{project_name}`或`{project_name}`，例如：
 
 ```text
-testcases/
+proj/
 ├── 01.datahub/
 ├── sdm_df/
 └── 2.inf_cent/
